@@ -78,7 +78,7 @@ function pickStreamingLinksFromRelease(rel) {
 // UI hydration
 // ------------------------------------------------------------
 
-function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, cover) {
+function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverImages) {
   bindThemeToggleOnce(document);
 
   bindTabsOnce({
@@ -94,7 +94,7 @@ function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, cover) {
 
   // Track toggles — pass onLoadRelease so artist panel can navigate
   bindTrackToggles(out, flatTracks, onLoadRelease);
-  bindTrackPlayback(out, flatTracks, cover);
+  bindTrackPlayback(out, flatTracks, coverImages);
 
   bindComposerHeadersOnce(out);
 
@@ -137,6 +137,13 @@ export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, on
   let idx = gallery.findIndex((x) => x.front);
   if (idx < 0) idx = 0;
   setCoverState({ gallery, index: idx });
+
+  // Small + large variants of the same front cover, for Media Session artwork
+  // (some OS "now playing" surfaces render blank if only a large image is given).
+  const frontCover = gallery[idx] || null;
+  const coverImages = frontCover
+    ? { thumb: frontCover.thumb, large: frontCover.large, full: frontCover.full }
+    : null;
 
   // Build flat track list for toggle binding
   const media = rel.media || [];
@@ -212,7 +219,7 @@ export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, on
     </div>
   `;
 
-  hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, cover);
+  hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverImages);
 
   layoutSync(out);
 

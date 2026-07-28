@@ -9,8 +9,8 @@ let currentOut = null;
 let currentTracks = [];
 let viewedTracks = [];
 let miniPlayer = null;
-let viewedCoverUrl = "";
-let currentCoverUrl = "";
+let viewedCoverImages = null;
+let currentCoverImages = null;
 
 const ICONS = {
   previous: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M18 6l-8 6 8 6V6z"/></svg>`,
@@ -71,9 +71,26 @@ function mediaSessionSupported() {
   return "mediaSession" in navigator;
 }
 
-function buildArtwork(coverUrl) {
-  if (!coverUrl) return [];
-  return [{ src: coverUrl, sizes: "512x512", type: "image/jpeg" }];
+function buildArtwork(coverImages) {
+  const thumb = coverImages?.thumb || "";
+  const large = coverImages?.large || coverImages?.full || "";
+  const artwork = [];
+
+  if (thumb) artwork.push({ src: thumb, sizes: "128x128", type: "image/jpeg" });
+  if (large) artwork.push({ src: large, sizes: "512x512", type: "image/jpeg" });
+
+  // If only one variant exists, still offer it under both size hints —
+  // some Now Playing surfaces render a blank box when nothing matches
+  // their preferred (usually small) slot.
+  if (artwork.length === 1) {
+    const only = artwork[0].src;
+    return [
+      { src: only, sizes: "128x128", type: "image/jpeg" },
+      { src: only, sizes: "512x512", type: "image/jpeg" },
+    ];
+  }
+
+  return artwork;
 }
 
 function updateMediaSessionMetadata(entry) {
@@ -87,7 +104,7 @@ function updateMediaSessionMetadata(entry) {
     title,
     artist,
     album,
-    artwork: buildArtwork(currentCoverUrl),
+    artwork: buildArtwork(currentCoverImages),
   });
 }
 
@@ -338,7 +355,7 @@ async function playViewedIndex(index) {
   audio.pause();
   releaseObjectUrl();
   currentTracks = [...viewedTracks];
-  currentCoverUrl = viewedCoverUrl;
+  currentCoverImages = viewedCoverImages;
   currentIndex = -1;
   await playIndex(index);
 }
@@ -389,14 +406,14 @@ audio.addEventListener("loadedmetadata", () => {
 
 bindMediaSessionActionsOnce();
 
-export function bindTrackPlayback(out, flatTracks, coverUrl = "") {
+export function bindTrackPlayback(out, flatTracks, coverImages = null) {
   currentOut = out;
   viewedTracks = flatTracks;
-  viewedCoverUrl = coverUrl || "";
+  viewedCoverImages = coverImages || null;
 
   // First-ever play on a freshly loaded page: nothing is queued yet, so the
   // playing queue's cover should track what's on screen until playback starts.
-  if (currentIndex < 0) currentCoverUrl = viewedCoverUrl;
+  if (currentIndex < 0) currentCoverImages = viewedCoverImages;
 
   out.querySelectorAll(".track-play").forEach((button) => {
     button.addEventListener("click", async (event) => {
