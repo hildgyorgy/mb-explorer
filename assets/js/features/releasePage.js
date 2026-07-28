@@ -162,6 +162,9 @@ export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, on
       const obj = {
         pos: t.position,
         title: t.title,
+        artist: artistCreditToText(
+          t["artist-credit"] || t.recording?.["artist-credit"] || []
+        ),
         len: fmtMs(t.length),
         rec: t.recording,
         isLocal,

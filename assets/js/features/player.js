@@ -74,30 +74,34 @@ function mediaSessionSupported() {
 function buildArtwork(coverImages) {
   const thumb = coverImages?.thumb || "";
   const large = coverImages?.large || coverImages?.full || "";
+  const full = coverImages?.full || "";
   const artwork = [];
+  const sources = new Set();
 
-  if (thumb) artwork.push({ src: thumb, sizes: "128x128", type: "image/jpeg" });
-  if (large) artwork.push({ src: large, sizes: "512x512", type: "image/jpeg" });
+  const addArtwork = (src, sizes = "") => {
+    if (!src || sources.has(src)) return;
+    sources.add(src);
+    artwork.push({
+      src,
+      ...(sizes ? { sizes, type: "image/jpeg" } : {}),
+    });
+  };
 
-  // If only one variant exists, still offer it under both size hints —
-  // some Now Playing surfaces render a blank box when nothing matches
-  // their preferred (usually small) slot.
-  if (artwork.length === 1) {
-    const only = artwork[0].src;
-    return [
-      { src: only, sizes: "128x128", type: "image/jpeg" },
-      { src: only, sizes: "512x512", type: "image/jpeg" },
-    ];
-  }
+  // Cover Art Archive's deprecated small/large aliases are 250 and 500 px.
+  // When an API fallback points at the original image, omit the size hint.
+  if (thumb !== large && thumb !== full) addArtwork(thumb, "250x250");
+  if (large !== full) addArtwork(large, "500x500");
+  addArtwork(full);
+  if (!artwork.length) addArtwork(large || thumb);
 
   return artwork;
 }
 
 function updateMediaSessionMetadata(entry) {
-  if (!mediaSessionSupported()) return;
+  if (!mediaSessionSupported() || typeof MediaMetadata !== "function") return;
 
   const title = entry?.title || entry?.localTrack?.track?.title || entry?.localTrack?.file?.name || "";
-  const artist = entry?.localTrack?.album?.artist_name || "";
+  const artist = entry?.artist || entry?.localTrack?.album?.artist_name || "";
   const album = entry?.localTrack?.album?.album_name || "";
 
   navigator.mediaSession.metadata = new MediaMetadata({
@@ -134,15 +138,26 @@ function bindMediaSessionActionsOnce() {
   if (!mediaSessionSupported() || bindMediaSessionActionsOnce.bound) return;
   bindMediaSessionActionsOnce.bound = true;
 
-  navigator.mediaSession.setActionHandler("play", () => {
-    if (currentIndex >= 0) playIndex(currentIndex);
+  const register = (action, handler) => {
+    try {
+      navigator.mediaSession.setActionHandler(action, handler);
+    } catch (error) {
+      console.debug(`Media Session action is not supported: ${action}`, error);
+    }
+  };
+
+  register("play", () => {
+    if (currentIndex < 0 || !audio.src) return;
+    audio.play().catch((error) => {
+      console.warn("Could not resume from the system media controls:", error);
+    });
   });
-  navigator.mediaSession.setActionHandler("pause", () => {
-    if (currentIndex >= 0) playIndex(currentIndex);
+  register("pause", () => {
+    if (currentIndex >= 0) audio.pause();
   });
-  navigator.mediaSession.setActionHandler("previoustrack", playPreviousLocalTrack);
-  navigator.mediaSession.setActionHandler("nexttrack", playNextLocalTrack);
-  navigator.mediaSession.setActionHandler("seekto", (event) => {
+  register("previoustrack", playPreviousLocalTrack);
+  register("nexttrack", playNextLocalTrack);
+  register("seekto", (event) => {
     if (Number.isFinite(event.seekTime)) audio.currentTime = event.seekTime;
   });
 }
@@ -391,7 +406,7 @@ audio.addEventListener("play", () => {
 });
 audio.addEventListener("pause", () => {
   syncPlayerUi();
-  updateMediaSessionPlaybackState("paused");
+  updateMediaSessionPlaybackState(currentIndex >= 0 ? "paused" : "none");
 });
 audio.addEventListener("ended", playNextLocalTrack);
 audio.addEventListener("timeupdate", () => {
