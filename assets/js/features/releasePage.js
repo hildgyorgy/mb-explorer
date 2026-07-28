@@ -78,7 +78,7 @@ function pickStreamingLinksFromRelease(rel) {
 // UI hydration
 // ------------------------------------------------------------
 
-function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease) {
+function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, cover) {
   bindThemeToggleOnce(document);
 
   bindTabsOnce({
@@ -94,7 +94,7 @@ function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease) {
 
   // Track toggles — pass onLoadRelease so artist panel can navigate
   bindTrackToggles(out, flatTracks, onLoadRelease);
-  bindTrackPlayback(out, flatTracks);
+  bindTrackPlayback(out, flatTracks, cover);
 
   bindComposerHeadersOnce(out);
 
@@ -212,7 +212,7 @@ export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, on
     </div>
   `;
 
-  hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease);
+  hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, cover);
 
   layoutSync(out);
 

@@ -9,6 +9,8 @@ let currentOut = null;
 let currentTracks = [];
 let viewedTracks = [];
 let miniPlayer = null;
+let viewedCoverUrl = "";
+let currentCoverUrl = "";
 
 const ICONS = {
   previous: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M18 6l-8 6 8 6V6z"/></svg>`,
@@ -58,6 +60,74 @@ function formatSourceQuality(track) {
 
   const quality = [codec, details.join(" / ")].filter(Boolean).join(" · ");
   return [quality, channels].filter(Boolean).join(" • ");
+}
+
+/* ============================================================
+   Media Session — surfaces now-playing info to the OS
+   (Control Center, lock screen, AirPlay receivers, etc.)
+   ============================================================ */
+
+function mediaSessionSupported() {
+  return "mediaSession" in navigator;
+}
+
+function buildArtwork(coverUrl) {
+  if (!coverUrl) return [];
+  return [{ src: coverUrl, sizes: "512x512", type: "image/jpeg" }];
+}
+
+function updateMediaSessionMetadata(entry) {
+  if (!mediaSessionSupported()) return;
+
+  const title = entry?.title || entry?.localTrack?.track?.title || entry?.localTrack?.file?.name || "";
+  const artist = entry?.localTrack?.album?.artist_name || "";
+  const album = entry?.localTrack?.album?.album_name || "";
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title,
+    artist,
+    album,
+    artwork: buildArtwork(currentCoverUrl),
+  });
+}
+
+function updateMediaSessionPlaybackState(state) {
+  if (!mediaSessionSupported()) return;
+  navigator.mediaSession.playbackState = state;
+}
+
+function updateMediaSessionPositionState() {
+  if (!mediaSessionSupported() || !("setPositionState" in navigator.mediaSession)) return;
+
+  const duration = audio.duration;
+  if (!Number.isFinite(duration) || duration <= 0) return;
+
+  try {
+    navigator.mediaSession.setPositionState({
+      duration,
+      playbackRate: audio.playbackRate || 1,
+      position: Math.min(audio.currentTime, duration),
+    });
+  } catch (error) {
+    // Some browsers reject calls made while metadata/duration is still settling — safe to ignore.
+  }
+}
+
+function bindMediaSessionActionsOnce() {
+  if (!mediaSessionSupported() || bindMediaSessionActionsOnce.bound) return;
+  bindMediaSessionActionsOnce.bound = true;
+
+  navigator.mediaSession.setActionHandler("play", () => {
+    if (currentIndex >= 0) playIndex(currentIndex);
+  });
+  navigator.mediaSession.setActionHandler("pause", () => {
+    if (currentIndex >= 0) playIndex(currentIndex);
+  });
+  navigator.mediaSession.setActionHandler("previoustrack", playPreviousLocalTrack);
+  navigator.mediaSession.setActionHandler("nexttrack", playNextLocalTrack);
+  navigator.mediaSession.setActionHandler("seekto", (event) => {
+    if (Number.isFinite(event.seekTime)) audio.currentTime = event.seekTime;
+  });
 }
 
 function ensureMiniPlayer() {
@@ -211,6 +281,8 @@ function clearCurrentPlayback() {
   releaseObjectUrl();
   currentIndex = -1;
   syncPlayerUi();
+  updateMediaSessionPlaybackState("none");
+  if (mediaSessionSupported()) navigator.mediaSession.metadata = null;
 }
 
 async function playIndex(index) {
@@ -236,6 +308,7 @@ async function playIndex(index) {
   currentIndex = index;
   audio.src = objectUrl;
   syncPlayerUi();
+  updateMediaSessionMetadata(entry);
 
   try {
     await audio.play();
@@ -265,6 +338,7 @@ async function playViewedIndex(index) {
   audio.pause();
   releaseObjectUrl();
   currentTracks = [...viewedTracks];
+  currentCoverUrl = viewedCoverUrl;
   currentIndex = -1;
   await playIndex(index);
 }
@@ -294,16 +368,35 @@ function playPreviousLocalTrack() {
   audio.currentTime = 0;
 }
 
-audio.addEventListener("play", syncPlayerUi);
-audio.addEventListener("pause", syncPlayerUi);
+audio.addEventListener("play", () => {
+  syncPlayerUi();
+  updateMediaSessionPlaybackState("playing");
+});
+audio.addEventListener("pause", () => {
+  syncPlayerUi();
+  updateMediaSessionPlaybackState("paused");
+});
 audio.addEventListener("ended", playNextLocalTrack);
-audio.addEventListener("timeupdate", syncMiniPlayer);
+audio.addEventListener("timeupdate", () => {
+  syncMiniPlayer();
+  updateMediaSessionPositionState();
+});
 audio.addEventListener("durationchange", syncMiniPlayer);
-audio.addEventListener("loadedmetadata", syncMiniPlayer);
+audio.addEventListener("loadedmetadata", () => {
+  syncMiniPlayer();
+  updateMediaSessionPositionState();
+});
 
-export function bindTrackPlayback(out, flatTracks) {
+bindMediaSessionActionsOnce();
+
+export function bindTrackPlayback(out, flatTracks, coverUrl = "") {
   currentOut = out;
   viewedTracks = flatTracks;
+  viewedCoverUrl = coverUrl || "";
+
+  // First-ever play on a freshly loaded page: nothing is queued yet, so the
+  // playing queue's cover should track what's on screen until playback starts.
+  if (currentIndex < 0) currentCoverUrl = viewedCoverUrl;
 
   out.querySelectorAll(".track-play").forEach((button) => {
     button.addEventListener("click", async (event) => {
