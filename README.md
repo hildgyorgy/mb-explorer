@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/icons/MB_go.png" width="112" alt="MusicBrainz Explorer logo">
-</p>
+![MusicBrainz Explorer screenshot](assets/hero.png)
 
 # MusicBrainz Explorer
 
