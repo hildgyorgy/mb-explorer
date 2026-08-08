@@ -9,6 +9,8 @@ the matching files from your own music library.
 
 ▶ [Open MusicBrainz Explorer](https://hildgyorgy.github.io/mb-release-player/)
 
+❔ [How to, support and privacy](https://hildgyorgy.github.io/mb-release-player/support.html)
+
 Built on the MusicBrainz API and Cover Art Archive. Designed for clear credits,
 calm navigation and an optional local playback layer.
 

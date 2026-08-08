@@ -591,6 +591,14 @@ a:hover {
   line-height: 1.5;
 }
 
+.search-help-support {
+  display: inline-block;
+  margin-bottom: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 1;
+}
+
 .local-library-start {
   width: 100%;
   margin-top: 15px;

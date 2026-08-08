@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description"
+    content="Help, setup instructions, privacy information and contact details for MusicBrainz Explorer.">
+  <meta name="color-scheme" content="light dark">
+  <title>MusicBrainz Explorer Support</title>
+
+  <link rel="icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6f9;
+      --surface: rgba(255, 255, 255, .72);
+      --text: #0a2244;
+      --muted: rgba(27, 30, 40, .68);
+      --meta: #5163a7;
+      --link: #2f5ee8;
+      --border: rgba(10, 34, 68, .11);
+      --code: rgba(81, 99, 167, .09);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0c10;
+        --surface: rgba(20, 24, 35, .78);
+        --text: #e9eef5;
+        --muted: rgba(233, 238, 245, .7);
+        --meta: #9aa4c7;
+        --link: #8ab4ff;
+        --border: #242a3a;
+        --code: rgba(138, 180, 255, .09);
+      }
+    }
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      line-height: 1.58;
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--link);
+      outline-offset: 4px;
+      border-radius: 3px;
+    }
+
+    .container {
+      width: min(720px, 100%);
+      margin: 0 auto;
+      padding: 48px 24px 64px;
+    }
+
+    .hero {
+      margin-bottom: 48px;
+      text-align: center;
+    }
+
+    .logo {
+      display: block;
+      width: 112px;
+      height: 112px;
+      margin: 0 auto 28px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(30px, 7vw, 42px);
+      font-weight: 700;
+      letter-spacing: -.025em;
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 22px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    section {
+      padding: 2px 0;
+    }
+
+    h2 {
+      margin: 38px 0 10px;
+      color: var(--meta);
+      font-size: 19px;
+      font-weight: 650;
+      letter-spacing: .025em;
+    }
+
+    h3 {
+      margin: 25px 0 7px;
+      font-size: 16px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    ul,
+    ol {
+      margin: 9px 0;
+      padding-left: 23px;
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    code {
+      padding: .12em .35em;
+      border-radius: 5px;
+      background: var(--code);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .88em;
+    }
+
+    .note {
+      margin: 18px 0;
+      padding: 15px 17px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    details {
+      padding: 13px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    details:first-of-type {
+      border-top: 1px solid var(--border);
+    }
+
+    summary {
+      color: var(--text);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    details p {
+      margin: 10px 0 2px;
+      color: var(--muted);
+    }
+
+    .contact {
+      margin-top: 42px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--surface);
+      text-align: center;
+    }
+
+    .contact h2 {
+      margin-top: 0;
+      color: var(--text);
+    }
+
+    .contact-link {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 10px 17px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--code);
+      font-weight: 650;
+    }
+
+    .footer {
+      margin-top: 48px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      .container {
+        padding: 36px 20px 48px;
+      }
+
+      .hero {
+        margin-bottom: 38px;
+      }
+
+      .logo {
+        width: 96px;
+        height: 96px;
+      }
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+      :root {
+        --surface: var(--bg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <header class="hero">
+      <img class="logo" src="./assets/icons/MB_go.png" alt="MusicBrainz Explorer logo">
+      <h1>MusicBrainz Explorer</h1>
+      <p class="subtitle">Explore releases. Play your own library.</p>
+      <a class="back-link" href="./">← Open MusicBrainz Explorer</a>
+    </header>
+
+    <section aria-labelledby="about">
+      <h2 id="about">About</h2>
+      <p>
+        MusicBrainz Explorer is a release-focused browser for MusicBrainz metadata. It presents cover art,
+        edition information, detailed track credits, related versions and artist discographies in a calm,
+        visual interface.
+      </p>
+      <p>
+        It can also map MusicBrainz-tagged files in your own music folder to the same releases and play them
+        locally. The player is optional: the Explorer remains fully usable without connecting a library.
+      </p>
+    </section>
+
+    <section aria-labelledby="searching">
+      <h2 id="searching">Finding releases</h2>
+      <ul>
+        <li>Type <code>miles davis,</code> to search for an artist.</li>
+        <li>Type <code>, kind of blue</code> to search by release or track title.</li>
+        <li>Type <code>miles davis, so what</code> for a combined search.</li>
+        <li>Paste a MusicBrainz release MBID or release URL to open that exact edition.</li>
+      </ul>
+      <p>
+        Click or tap the Explorer logo on the start page whenever you need a reminder of the search syntax.
+      </p>
+    </section>
+
+    <section aria-labelledby="local-playback">
+      <h2 id="local-playback">Playing your own library</h2>
+      <p>
+        Local playback relies on the MusicBrainz release and recording IDs stored in your audio files.
+        Folder names are not used to identify albums.
+      </p>
+
+      <h3>Before you begin</h3>
+      <ul>
+        <li>Tag the files with <a href="https://picard.musicbrainz.org/">MusicBrainz Picard</a>.</li>
+        <li>Keep the release MBID and recording MBID embedded in every file.</li>
+        <li>Use FLAC or M4A files (ALAC/AAC).</li>
+        <li>Keep all discs of one multi-disc release together in the same release folder.</li>
+      </ul>
+
+      <h3>1. Create the library index</h3>
+      <ol>
+        <li>Select <strong>Create Library Index</strong> on the Explorer start page.</li>
+        <li>Choose the root of your Music folder.</li>
+        <li>Allow the browser to scan the supported audio files.</li>
+        <li>Place the downloaded <code>library.json</code> in the root of the selected Music folder.</li>
+      </ol>
+      <p>
+        The browser indexer reads only the required MusicBrainz tags, technical audio properties and relative
+        file locations. Embedded cover images are skipped.
+      </p>
+
+      <div class="note">
+        Some browsers label the folder-selection confirmation button “Upload”. No music or index data is
+        uploaded to the Explorer, GitHub, MusicBrainz or any application server. The scan happens locally in
+        your browser.
+      </div>
+
+      <h3>Faster indexing with Python</h3>
+      <p>
+        For large libraries, download
+        <a href="./generate_library.py"><code>generate_library.py</code></a> and run it locally. It uses only
+        the Python standard library and needs no extra packages.
+      </p>
+      <p>macOS or Linux:</p>
+      <p><code>python3 generate_library.py "/path/to/Music"</code></p>
+      <p>Windows:</p>
+      <p><code>py generate_library.py "D:\Music"</code></p>
+
+      <h3>2. Connect the Music folder</h3>
+      <ol>
+        <li>Select <strong>Connect Music Folder</strong>.</li>
+        <li>Choose the same folder that now contains <code>library.json</code>.</li>
+        <li>Confirm the browser's folder-selection dialog.</li>
+      </ol>
+      <p>
+        A small play triangle marks matching releases in search results. Open one, then hover over a track
+        number and select its play icon. The floating player continues playing while you browse another release.
+      </p>
+      <p>
+        Folder permission lasts only for the current page session. You will need to connect the folder again
+        after closing or reloading the page.
+      </p>
+    </section>
+
+    <section aria-labelledby="troubleshooting">
+      <h2 id="troubleshooting">Troubleshooting</h2>
+
+      <details>
+        <summary>No local releases appear after connecting</summary>
+        <p>
+          Check that <code>library.json</code> is in the root of the folder you selected, then recreate the
+          index. The files must contain both MusicBrainz release and recording MBIDs written by Picard.
+        </p>
+      </details>
+
+      <details>
+        <summary>The browser says “Upload”</summary>
+        <p>
+          This is wording supplied by the browser's native folder picker. The Explorer uses the selected files
+          locally and does not send your music library to a server.
+        </p>
+      </details>
+
+      <details>
+        <summary>A release opens, but some tracks are not playable</summary>
+        <p>
+          Retag and reindex the affected files. A missing or mismatched recording MBID prevents the Explorer
+          from linking that track to its local file. Repeated use of the same recording within one release is
+          also a known edge case in the current index format.
+        </p>
+      </details>
+
+      <details>
+        <summary>The browser cannot play a FLAC or M4A file</summary>
+        <p>
+          Actual codec support depends on the browser and operating system. M4A is a container and may contain
+          ALAC or AAC; support for a particular combination can vary. Trying a current version of another
+          desktop browser can help identify a compatibility issue.
+        </p>
+      </details>
+
+      <details>
+        <summary>The cover art does not appear on an AirPlay receiver</summary>
+        <p>
+          The Explorer provides title, artist, album and artwork through the browser's Media Session support.
+          Whether all of it reaches an AirPlay receiver depends on the browser, operating system and receiver.
+          Playback and text metadata may work even when artwork is not forwarded.
+        </p>
+      </details>
+    </section>
+
+    <section aria-labelledby="audio">
+      <h2 id="audio">Audio playback</h2>
+      <p>
+        The Explorer plays the original selected file through the browser's native audio pipeline and does not
+        deliberately transcode it. Source information such as codec, bit depth, sample rate and channel layout
+        is shown when available.
+      </p>
+      <p>
+        Because the browser, operating-system mixer and chosen audio device remain part of the playback chain,
+        bit-perfect output cannot be guaranteed.
+      </p>
+    </section>
+
+    <section aria-labelledby="privacy">
+      <h2 id="privacy">Privacy</h2>
+      <ul>
+        <li>MusicBrainz Explorer has no application backend or user accounts.</li>
+        <li>Your music files and <code>library.json</code> are not uploaded by the app.</li>
+        <li>Browser indexing and playback happen locally on your device.</li>
+        <li>The app does not retain folder access after the page session ends.</li>
+        <li>Music metadata and cover art are requested from MusicBrainz and the Cover Art Archive.</li>
+      </ul>
+      <p>
+        Those external services may process requests according to their own privacy policies.
+      </p>
+    </section>
+
+    <section aria-labelledby="current-scope">
+      <h2 id="current-scope">Current scope</h2>
+      <ul>
+        <li>The local-library workflow is designed primarily for desktop browsers.</li>
+        <li>The indexers currently support FLAC and M4A (ALAC/AAC).</li>
+        <li>One local copy is expected for each MusicBrainz release MBID.</li>
+        <li>Files must already be tagged correctly with MusicBrainz Picard.</li>
+        <li>Local folder access must be granted again in each new browser session.</li>
+      </ul>
+    </section>
+
+    <section class="contact" aria-labelledby="support">
+      <h2 id="support">Support and feedback</h2>
+      <p>
+        Questions, bug reports and ideas are all welcome. If something does not work, please include your
+        browser, operating system and the step where the problem occurred.
+      </p>
+      <a class="contact-link" href="mailto:hild.gyorgy@freemail.hu?subject=MusicBrainz%20Explorer">
+        Email György Hild
+      </a>
+    </section>
+
+    <section aria-labelledby="attribution">
+      <h2 id="attribution">Attribution</h2>
+      <p>
+        Music metadata is provided by
+        <a href="https://musicbrainz.org/">MusicBrainz contributors</a>. Cover art is provided by the
+        <a href="https://coverartarchive.org/">Cover Art Archive</a>.
+      </p>
+      <p>
+        MusicBrainz Explorer is an independent project and is not affiliated with or endorsed by MusicBrainz
+        or MetaBrainz.
+      </p>
+    </section>
+
+    <footer class="footer">
+      MusicBrainz Explorer v0.2.0<br>
+      © 2026 György Hild
+    </footer>
+  </main>
+</body>
+
+</html>
