@@ -154,7 +154,7 @@ export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, on
   const mediaWithTracks = media.map((m, mi) => {
     const mt = (m.tracks || []).map((t) => {
       const localTrack = localAlbum
-        ? getLocalTrack(rel.id, t.recording?.id)
+        ? getLocalTrack(rel.id, t.recording?.id, t.id)
         : null;
       const isLocal = !!localTrack?.file;
       if (isLocal) localTrackCount += 1;

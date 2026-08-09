@@ -56,24 +56,30 @@ function rebuildLocalIndex() {
 
     localAlbumsByMbid.set(releaseKey, album);
     const tracksByRecording = new Map();
+    const tracksByReleaseTrack = new Map();
 
     for (const track of album.tracks || []) {
       const recordingKey = mbidKey(track.track_mbid);
-      if (!recordingKey || tracksByRecording.has(recordingKey)) continue;
-
       const relativePath = [album.folder_path, track.filename]
         .filter(Boolean)
         .join("/");
-
-      tracksByRecording.set(recordingKey, {
+      const localTrack = {
         album,
         track,
         relativePath,
         file: getLocalFile(relativePath),
-      });
+      };
+
+      const releaseTrackKey = mbidKey(track.release_track_mbid);
+      if (releaseTrackKey && !tracksByReleaseTrack.has(releaseTrackKey)) {
+        tracksByReleaseTrack.set(releaseTrackKey, localTrack);
+      }
+      if (recordingKey && !tracksByRecording.has(recordingKey)) {
+        tracksByRecording.set(recordingKey, localTrack);
+      }
     }
 
-    localTracksByRelease.set(releaseKey, tracksByRecording);
+    localTracksByRelease.set(releaseKey, { tracksByReleaseTrack, tracksByRecording });
   }
 }
 
@@ -175,11 +181,14 @@ export function getLocalAlbum(releaseMbid) {
   return localAlbumsByMbid.get(mbidKey(releaseMbid)) || null;
 }
 
-export function getLocalTrack(releaseMbid, recordingMbid) {
+export function getLocalTrack(releaseMbid, recordingMbid, releaseTrackMbid = "") {
+  const tracks = localTracksByRelease.get(mbidKey(releaseMbid));
+  if (!tracks) return null;
+
   return (
-    localTracksByRelease
-      .get(mbidKey(releaseMbid))
-      ?.get(mbidKey(recordingMbid)) || null
+    tracks.tracksByReleaseTrack.get(mbidKey(releaseTrackMbid)) ||
+    tracks.tracksByRecording.get(mbidKey(recordingMbid)) ||
+    null
   );
 }
 
@@ -319,7 +328,10 @@ export function bindLocalLibraryPicker(root = document) {
         status.textContent = `Indexing ${current.toLocaleString()} of ${total.toLocaleString()} audio files…`;
       });
       const json = `${JSON.stringify(result.library, null, 4)}\n`;
-      const summary = `${result.library.length.toLocaleString()} albums and ${result.audioFileCount.toLocaleString()} audio files indexed in ${result.elapsedSeconds.toFixed(2)} seconds.`;
+      const reused = result.reusedAlbumCount
+        ? ` ${result.reusedAlbumCount.toLocaleString()} unchanged albums reused.`
+        : "";
+      const summary = `${result.library.length.toLocaleString()} albums and ${result.audioFileCount.toLocaleString()} audio files indexed in ${result.elapsedSeconds.toFixed(2)} seconds.${reused}`;
       const approved = window.confirm(`${summary}\n\nSave library.json now?`);
 
       if (!approved) {

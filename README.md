@@ -79,7 +79,10 @@ There are two supported methods.
 
 Indexing happens entirely in the browser. Embedded cover artwork is skipped;
 only the required tags, technical audio properties and relative file locations
-are read.
+are read. The generated file uses index format version 2 and stores both the
+MusicBrainz recording and release-track IDs. When an existing version 2
+`library.json` is present, unchanged album folders are reused and only changed
+folders are read again.
 
 Some browsers use the word **Upload** in their native folder picker. Despite
 that wording, the Explorer does not upload your index or music files to a
@@ -165,8 +168,6 @@ part of the playback chain, bit-perfect output cannot be guaranteed.
 - The indexers currently support FLAC and M4A (ALAC/AAC).
 - Files must already be tagged correctly with Picard.
 - One local copy is expected for each MusicBrainz release MBID.
-- Repeated occurrences of the same recording within one release are a known
-  edge case in the current index model.
 - Local folder permission must be granted again after closing the page.
 - Browser support and folder-picker wording vary by platform.
 - Cloud storage and Navidrome/OpenSubsonic connections are ideas for future

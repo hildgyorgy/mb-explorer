@@ -1,4 +1,5 @@
 const SUPPORTED_EXTENSIONS = [".flac", ".m4a"];
+const INDEX_VERSION = 2;
 
 function extensionOf(name) {
   const dot = String(name || "").lastIndexOf(".");
@@ -38,6 +39,11 @@ function metadataFromTags(file, tags) {
     filename: file.name,
     title: first(tags, "title", "©nam") || file.name.replace(/\.[^.]+$/, ""),
     track_mbid: first(tags, "musicbrainz_trackid", "musicbrainz track id"),
+    release_track_mbid: first(
+      tags,
+      "musicbrainz_releasetrackid",
+      "musicbrainz release track id"
+    ),
     album_mbid: first(tags, "musicbrainz_albumid", "musicbrainz album id"),
     album_name: first(tags, "album", "©alb"),
     artist_name: first(tags, "albumartist", "aart", "artist", "©art"),
@@ -326,41 +332,155 @@ async function mapWithConcurrency(items, concurrency, mapper) {
   return results;
 }
 
-export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
-  const startedAt = performance.now();
+function groupAudioEntries(filesByPath) {
+  const folders = new Map();
   const audioEntries = [...filesByPath.entries()]
     .filter(([, file]) => isAudioFile(file.name))
     .sort(([pathA], [pathB]) => pathA.localeCompare(pathB));
+
+  for (const [relativePath, file] of audioEntries) {
+    const folderPath = folderOf(relativePath);
+    if (!folders.has(folderPath)) folders.set(folderPath, []);
+    folders.get(folderPath).push({ relativePath, file });
+  }
+
+  return { audioEntries, folders };
+}
+
+async function loadExistingLibrary(filesByPath) {
+  const indexFile = filesByPath.get("library.json");
+  if (!indexFile) return { albumsByFolder: new Map(), warning: "" };
+
+  try {
+    const library = JSON.parse(await indexFile.text());
+    if (!Array.isArray(library)) {
+      throw new Error("the top-level JSON value is not an array");
+    }
+    return {
+      albumsByFolder: new Map(
+        library
+          .filter((album) => album && typeof album === "object" && album.folder_path)
+          .map((album) => [album.folder_path, album])
+      ),
+      warning: "",
+    };
+  } catch (error) {
+    return {
+      albumsByFolder: new Map(),
+      warning: `Existing index cannot be reused; rebuilding it (${error?.message || error})`,
+    };
+  }
+}
+
+function fileModifiedNs(file) {
+  // File.lastModified has millisecond precision. Keep the v2 field in
+  // nanoseconds so indexes made by the browser, Python and MusiCards share
+  // the same schema. Values are compared with a one-millisecond tolerance.
+  return Number(BigInt(Math.trunc(file.lastModified)) * 1_000_000n);
+}
+
+function albumIsUnchanged(album, audioEntries) {
+  if (album?.index_version !== INDEX_VERSION) return false;
+  if (!Array.isArray(album.tracks) || album.tracks.length !== audioEntries.length) return false;
+
+  const tracksByName = new Map(
+    album.tracks
+      .filter((track) => track && typeof track === "object" && track.filename)
+      .map((track) => [track.filename, track])
+  );
+  if (tracksByName.size !== audioEntries.length) return false;
+
+  return audioEntries.every(({ file }) => {
+    const track = tracksByName.get(file.name);
+    if (!track || track.file_size !== file.size || track.modified_ns == null) return false;
+
+    try {
+      const oldNanoseconds = BigInt(Math.trunc(Number(track.modified_ns)));
+      const newNanoseconds = BigInt(Math.trunc(file.lastModified)) * 1_000_000n;
+      const difference = oldNanoseconds >= newNanoseconds
+        ? oldNanoseconds - newNanoseconds
+        : newNanoseconds - oldNanoseconds;
+      return difference <= 1_000_000n;
+    } catch {
+      return false;
+    }
+  });
+}
+
+export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
+  const startedAt = performance.now();
+  const { audioEntries, folders } = groupAudioEntries(filesByPath);
+  const existing = await loadExistingLibrary(filesByPath);
+  const warnings = existing.warning ? [existing.warning] : [];
+  const libraryByFolder = new Map();
+  const entriesToIndex = [];
   let completed = 0;
+  let reusedAlbumCount = 0;
+
+  for (const [folderPath, folderEntries] of folders) {
+    const existingAlbum = existing.albumsByFolder.get(folderPath);
+    if (existingAlbum && albumIsUnchanged(existingAlbum, folderEntries)) {
+      libraryByFolder.set(folderPath, existingAlbum);
+      reusedAlbumCount += 1;
+      for (const { relativePath } of folderEntries) {
+        completed += 1;
+        onProgress(completed, audioEntries.length, relativePath);
+      }
+    } else {
+      entriesToIndex.push(...folderEntries);
+    }
+  }
+
   const concurrency = Math.min(8, Math.max(4, navigator.hardwareConcurrency || 4));
   const indexedFiles = await mapWithConcurrency(
-    audioEntries,
+    entriesToIndex,
     concurrency,
-    async ([relativePath, file]) => {
-      const metadata = await readMetadata(file);
+    async ({ relativePath, file }) => {
+      let metadata = null;
+      let error = null;
+      try {
+        metadata = await readMetadata(file);
+      } catch (caughtError) {
+        error = caughtError;
+      }
       completed += 1;
       onProgress(completed, audioEntries.length, relativePath);
-      return { relativePath, metadata };
+      return { relativePath, file, metadata, error };
     }
   );
 
-  const folders = new Map();
-  for (const { relativePath, metadata } of indexedFiles) {
+  const indexedByFolder = new Map();
+  for (const entry of indexedFiles) {
+    const { relativePath } = entry;
     const folderPath = folderOf(relativePath);
-    if (!folders.has(folderPath)) folders.set(folderPath, []);
-    folders.get(folderPath).push(metadata);
+    if (!indexedByFolder.has(folderPath)) indexedByFolder.set(folderPath, []);
+    indexedByFolder.get(folderPath).push(entry);
   }
 
-  const library = [];
-  const warnings = [];
-  for (const [folderPath, tracks] of folders) {
-    const album = tracks[0];
+  for (const [folderPath, folderEntries] of indexedByFolder) {
+    const readableEntries = folderEntries.filter(({ relativePath, error }) => {
+      if (!error) return true;
+      warnings.push(`Could not read, skipped: ${relativePath} (${error?.message || error})`);
+      return false;
+    });
+    if (!readableEntries.length) continue;
+
+    const album = readableEntries[0].metadata;
     if (!album.album_mbid) {
       warnings.push(`Skipped (Release MBID is missing): ${folderPath}`);
       continue;
     }
+
+    const matchingEntries = readableEntries.filter(({ relativePath, metadata }) => {
+      if (!metadata.album_mbid || metadata.album_mbid.toLowerCase() === album.album_mbid.toLowerCase()) {
+        return true;
+      }
+      warnings.push(`Skipped (Release MBID differs from its folder): ${relativePath}`);
+      return false;
+    });
     const fallback = fallbackAlbumNames(folderPath);
-    library.push({
+    libraryByFolder.set(folderPath, {
+      index_version: INDEX_VERSION,
       album_name: album.album_name || fallback.album,
       artist_name: album.artist_name || fallback.artist,
       album_mbid: album.album_mbid,
@@ -369,32 +489,32 @@ export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
       label: album.label,
       media_format: album.media_format,
       folder_path: folderPath,
-      tracks: tracks.map(({
-        filename,
-        title,
-        track_mbid,
-        codec,
-        bit_depth,
-        sample_rate,
-        bitrate,
-        channels,
-      }) => ({
-        filename,
-        title,
-        track_mbid,
-        codec,
-        bit_depth,
-        sample_rate,
-        bitrate,
-        channels,
+      tracks: matchingEntries.map(({ file, metadata }) => ({
+        filename: metadata.filename,
+        title: metadata.title,
+        track_mbid: metadata.track_mbid,
+        release_track_mbid: metadata.release_track_mbid,
+        codec: metadata.codec,
+        bit_depth: metadata.bit_depth,
+        sample_rate: metadata.sample_rate,
+        bitrate: metadata.bitrate,
+        channels: metadata.channels,
+        file_size: file.size,
+        modified_ns: fileModifiedNs(file),
+        modified_at: new Date(file.lastModified).toISOString(),
       })),
     });
   }
+
+  const library = [...folders.keys()]
+    .map((folderPath) => libraryByFolder.get(folderPath))
+    .filter(Boolean);
 
   return {
     library,
     warnings,
     audioFileCount: audioEntries.length,
+    reusedAlbumCount,
     elapsedSeconds: (performance.now() - startedAt) / 1000,
   };
 }

@@ -296,7 +296,8 @@
       </ol>
       <p>
         The browser indexer reads only the required MusicBrainz tags, technical audio properties and relative
-        file locations. Embedded cover images are skipped.
+        file locations. Embedded cover images and audio payloads are skipped. If the folder already contains a
+        version 2 <code>library.json</code>, unchanged albums are reused and only changed folders are indexed again.
       </p>
 
       <div class="note">
@@ -354,9 +355,9 @@
       <details>
         <summary>A release opens, but some tracks are not playable</summary>
         <p>
-          Retag and reindex the affected files. A missing or mismatched recording MBID prevents the Explorer
-          from linking that track to its local file. Repeated use of the same recording within one release is
-          also a known edge case in the current index format.
+          Retag and reindex the affected files. Missing or mismatched MusicBrainz release-track and recording
+          MBIDs can prevent the Explorer from linking that track to its local file. Version 2 indexes use the
+          release-track MBID to distinguish repeated occurrences of the same recording within a release.
         </p>
       </details>
 
