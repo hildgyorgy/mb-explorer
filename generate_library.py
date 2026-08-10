@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import json
 import os
 import struct
@@ -6,12 +7,13 @@ import time
 
 
 SUPPORTED_EXTENSIONS = (".flac", ".m4a")
+INDEX_VERSION = 2
 
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description=(
-            "Create library.json for MusicBrainz Release Player from a "
+            "Create library.json for MusiCards from a "
             "Picard-tagged FLAC/M4A music folder."
         )
     )
@@ -48,6 +50,7 @@ def empty_metadata(file_path):
         "filename": os.path.basename(file_path),
         "title": None,
         "track_mbid": None,
+        "release_track_mbid": None,
         "album_mbid": None,
         "album_name": None,
         "artist_name": None,
@@ -72,6 +75,11 @@ def metadata_from_tags(file_path, tags):
     metadata.update({
         "title": first(tags, "title", "©nam"),
         "track_mbid": first(tags, "musicbrainz_trackid", "musicbrainz track id"),
+        "release_track_mbid": first(
+            tags,
+            "musicbrainz_releasetrackid",
+            "musicbrainz release track id",
+        ),
         "album_mbid": first(tags, "musicbrainz_albumid", "musicbrainz album id"),
         "album_name": first(tags, "album", "©alb"),
         "artist_name": first(tags, "albumartist", "aart", "artist", "©art"),
@@ -328,12 +336,59 @@ def read_metadata(file_path):
     return metadata
 
 
+def load_existing_library(output_path):
+    if not os.path.isfile(output_path):
+        return {}
+    try:
+        with open(output_path, "r", encoding="utf-8") as input_file:
+            library = json.load(input_file)
+        if not isinstance(library, list):
+            raise ValueError("the top-level JSON value is not an array")
+        return {
+            album.get("folder_path"): album
+            for album in library
+            if isinstance(album, dict) and album.get("folder_path")
+        }
+    except Exception as error:
+        print(f"⚠️ Existing index cannot be reused; rebuilding it ({error})")
+        return {}
+
+
+def album_is_unchanged(album, folder_path, audio_files):
+    if album.get("index_version") != INDEX_VERSION:
+        return False
+    tracks = album.get("tracks")
+    if not isinstance(tracks, list) or len(tracks) != len(audio_files):
+        return False
+    tracks_by_name = {
+        track.get("filename"): track
+        for track in tracks
+        if isinstance(track, dict) and track.get("filename")
+    }
+    if set(tracks_by_name) != set(audio_files):
+        return False
+
+    for filename in audio_files:
+        track = tracks_by_name[filename]
+        if "file_size" not in track or "modified_ns" not in track:
+            return False
+        file_stat = os.stat(os.path.join(folder_path, filename))
+        if (
+            track["file_size"] != file_stat.st_size
+            or track["modified_ns"] != file_stat.st_mtime_ns
+        ):
+            return False
+    return True
+
+
 def main():
     arguments = parse_arguments()
     music_dir, output_path = resolve_paths(arguments)
     started_at = time.perf_counter()
     print(f"🎵 Music library indexing started: {music_dir}")
     library = []
+    skipped_missing_release_mbid = 0
+    existing_library = load_existing_library(output_path)
 
     for root, dirs, files in os.walk(music_dir):
         dirs.sort()
@@ -342,6 +397,20 @@ def main():
             if filename.lower().endswith(SUPPORTED_EXTENSIONS)
         )
         if not audio_files:
+            continue
+
+        # JSON paths always use forward slashes so the web player and native
+        # apps can resolve the same index on Windows, macOS and Linux.
+        relative_path = os.path.relpath(root, music_dir).replace(os.sep, "/")
+        existing_album = existing_library.get(relative_path)
+        if existing_album and album_is_unchanged(existing_album, root, audio_files):
+            library.append(existing_album)
+            print(
+                "♻️ Unchanged: "
+                f"{existing_album.get('artist_name') or '?'} - "
+                f"{existing_album.get('album_name') or os.path.basename(root)} "
+                f"({len(audio_files)} tracks)"
+            )
             continue
 
         tracks = []
@@ -357,26 +426,43 @@ def main():
 
             if album_meta is None:
                 album_meta = metadata
+            elif (
+                album_meta["album_mbid"]
+                and metadata["album_mbid"]
+                and album_meta["album_mbid"] != metadata["album_mbid"]
+            ):
+                print(
+                    "⚠️ Skipped (Release MBID differs from its folder): "
+                    f"{file_path}"
+                )
+                continue
+
+            file_stat = os.stat(file_path)
             tracks.append({
                 "filename": metadata["filename"],
                 "title": metadata["title"],
                 "track_mbid": metadata["track_mbid"],
+                "release_track_mbid": metadata["release_track_mbid"],
                 "codec": metadata["codec"],
                 "bit_depth": metadata["bit_depth"],
                 "sample_rate": metadata["sample_rate"],
                 "bitrate": metadata["bitrate"],
                 "channels": metadata["channels"],
+                "file_size": file_stat.st_size,
+                "modified_ns": file_stat.st_mtime_ns,
+                "modified_at": datetime.datetime.fromtimestamp(
+                    file_stat.st_mtime,
+                    tz=datetime.timezone.utc,
+                ).isoformat().replace("+00:00", "Z"),
             })
 
         if album_meta is None:
             continue
         if not album_meta["album_mbid"]:
             print(f"⚠️ Skipped (Release MBID is missing): {root}")
+            skipped_missing_release_mbid += 1
             continue
 
-        # JSON paths always use forward slashes so the web player can resolve
-        # the same index on Windows, macOS and Linux.
-        relative_path = os.path.relpath(root, music_dir).replace(os.sep, "/")
         album_name = album_meta["album_name"] or os.path.basename(root)
         artist_name = album_meta["artist_name"] or os.path.basename(os.path.dirname(root))
 
@@ -386,6 +472,7 @@ def main():
             print(f"⚠️ Album Artist tag is missing; using the parent folder name: {root}")
 
         library.append({
+            "index_version": INDEX_VERSION,
             "album_name": album_name,
             "artist_name": artist_name,
             "album_mbid": album_meta["album_mbid"],
@@ -401,11 +488,24 @@ def main():
     output_directory = os.path.dirname(output_path)
     if output_directory and not os.path.isdir(output_directory):
         raise SystemExit(f"Error: output folder does not exist: {output_directory}")
-    with open(output_path, "w", encoding="utf-8") as output_file:
-        json.dump(library, output_file, ensure_ascii=False, indent=4)
+    temporary_path = output_path + ".tmp"
+    try:
+        with open(temporary_path, "w", encoding="utf-8") as output_file:
+            json.dump(library, output_file, ensure_ascii=False, indent=4)
+            output_file.write("\n")
+        os.replace(temporary_path, output_path)
+    finally:
+        if os.path.exists(temporary_path):
+            os.remove(temporary_path)
 
     elapsed_seconds = time.perf_counter() - started_at
     print(f"\n🎉 SUCCESS! The library index has been created: {output_path}")
+    if skipped_missing_release_mbid:
+        noun = "folder" if skipped_missing_release_mbid == 1 else "folders"
+        print(
+            f"⚠️ {skipped_missing_release_mbid} {noun} skipped "
+            "because Release MBID is missing."
+        )
     print(f"⏱️ Indexing completed in {elapsed_seconds:.2f} seconds.")
 
 
