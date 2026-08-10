@@ -16,6 +16,7 @@ let selectedLibrary = null;
 let libraryError = "";
 let localAlbumsByMbid = new Map();
 let localTracksByRelease = new Map();
+const SUPPORTED_AUDIO_EXTENSIONS = [".flac", ".m4a"];
 
 function mbidKey(value) {
   return String(value || "").trim().toLowerCase();
@@ -46,6 +47,11 @@ function storeSelectedFileMap(filesByPath) {
   return selectedFilesByPath.size;
 }
 
+function relativeTrackPath(album, track) {
+  const folderPath = album?.folder_path === "." ? "" : album?.folder_path;
+  return [folderPath, track?.filename].filter(Boolean).join("/");
+}
+
 function rebuildLocalIndex() {
   localAlbumsByMbid = new Map();
   localTracksByRelease = new Map();
@@ -60,9 +66,7 @@ function rebuildLocalIndex() {
 
     for (const track of album.tracks || []) {
       const recordingKey = mbidKey(track.track_mbid);
-      const relativePath = [album.folder_path, track.filename]
-        .filter(Boolean)
-        .join("/");
+      const relativePath = relativeTrackPath(album, track);
       const localTrack = {
         album,
         track,
@@ -84,13 +88,27 @@ function rebuildLocalIndex() {
   }
 }
 
-function summarizeLibrary(albums) {
-  const trackCount = albums.reduce(
-    (total, album) => total + (Array.isArray(album?.tracks) ? album.tracks.length : 0),
-    0
-  );
+function detectedAlbumFolderCount() {
+  const folders = new Set();
 
-  return { albumCount: albums.length, trackCount };
+  for (const [relativePath, file] of selectedFilesByPath) {
+    const name = String(file?.name || relativePath).toLowerCase();
+    if (!SUPPORTED_AUDIO_EXTENSIONS.some((extension) => name.endsWith(extension))) continue;
+
+    const slash = relativePath.lastIndexOf("/");
+    folders.add(slash === -1 ? "." : relativePath.slice(0, slash));
+  }
+
+  return folders.size;
+}
+
+function playableAlbumCount() {
+  return (selectedLibrary || []).reduce((count, album) => {
+    const hasPlayableTrack = (album.tracks || []).some(
+      (track) => !!getLocalFile(relativeTrackPath(album, track))
+    );
+    return count + (hasPlayableTrack ? 1 : 0);
+  }, 0);
 }
 
 function validateLibrary(data) {
@@ -126,48 +144,24 @@ function statusText() {
   if (libraryError) return libraryError;
   if (!selectedLibrary) return "Your Music folder is not connected.";
 
-  const { albumCount, trackCount } = summarizeLibrary(selectedLibrary);
-  return `Connected: ${albumCount.toLocaleString()} albums, ${trackCount.toLocaleString()} tracks · ${selectedFilesByPath.size.toLocaleString()} files available for playing.`;
+  const detectedCount = detectedAlbumFolderCount();
+  const playableCount = playableAlbumCount();
+
+  if (!detectedCount) {
+    return "Connected.\nNo FLAC/M4A album folders were found in the selected folder.";
+  }
+
+  const folderLabel = detectedCount === 1 ? "album folder" : "album folders";
+  if (playableCount === detectedCount) {
+    return `Connected.\nAll ${detectedCount.toLocaleString()} detected ${folderLabel} are indexed and available for playback.`;
+  }
+
+  return `Connected.\n${playableCount.toLocaleString()} of ${detectedCount.toLocaleString()} detected ${folderLabel} are indexed and available for playback.\n\nTo add more albums, tag their FLAC/M4A files with MusicBrainz Picard, then rebuild the library index.`;
 }
 
 function renderStatus(status) {
   status.textContent = statusText();
   status.classList.toggle("err", !!libraryError);
-}
-
-function renderLibraryList(container) {
-  container.replaceChildren();
-
-  if (!selectedLibrary?.length) {
-    container.hidden = true;
-    return;
-  }
-
-  const albums = [...selectedLibrary].sort((a, b) => {
-    const artistOrder = String(a.artist_name || "").localeCompare(
-      String(b.artist_name || ""),
-      undefined,
-      { sensitivity: "base" }
-    );
-    if (artistOrder) return artistOrder;
-    return String(a.album_name || "").localeCompare(
-      String(b.album_name || ""),
-      undefined,
-      { sensitivity: "base" }
-    );
-  });
-
-  const list = document.createElement("ul");
-  for (const album of albums) {
-    const item = document.createElement("li");
-    const artist = String(album.artist_name || "Unknown artist");
-    const title = String(album.album_name || "Untitled album");
-    item.textContent = `${artist} : ${title}`;
-    list.appendChild(item);
-  }
-
-  container.appendChild(list);
-  container.hidden = false;
 }
 
 export function getLocalFile(relativePath) {
@@ -302,12 +296,10 @@ export function bindLocalLibraryPicker(root = document) {
   const input = root.getElementById("musicFolderInput");
   const indexInput = root.getElementById("indexMusicFolderInput");
   const status = root.getElementById("musicFolderStatus");
-  const list = root.getElementById("localLibraryList");
 
-  if (!button || !indexButton || !input || !indexInput || !status || !list || button.dataset.bound === "1") return;
+  if (!button || !indexButton || !input || !indexInput || !status || button.dataset.bound === "1") return;
   button.dataset.bound = "1";
   renderStatus(status);
-  renderLibraryList(list);
 
   button.addEventListener("click", () => input.click());
 
@@ -328,7 +320,6 @@ export function bindLocalLibraryPicker(root = document) {
     }
 
     renderStatus(status);
-    renderLibraryList(list);
   });
 
   async function createIndex(filesByPath, directoryHandle = null) {
@@ -368,7 +359,6 @@ export function bindLocalLibraryPicker(root = document) {
       storeSelectedFileMap(filesByPath);
       selectedLibrary = validateLibrary(result.library);
       rebuildLocalIndex();
-      renderLibraryList(list);
       if (result.warnings.length) console.warn("Library index warnings:", result.warnings);
     } catch (error) {
       if (error?.name === "AbortError") return;

@@ -611,25 +611,6 @@ a:hover {
   white-space: pre-line;
 }
 
-.local-library-list {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-}
-
-.local-library-list ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.local-library-list li {
-  padding: 3px 0;
-  color: var(--meta);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
 @media (max-width: 640px) {
   .empty-state {
     place-items: start;
