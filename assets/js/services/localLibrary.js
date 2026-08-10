@@ -156,7 +156,7 @@ function statusText() {
     return `Connected.\nAll ${detectedCount.toLocaleString()} detected ${folderLabel} are indexed and available for playback.`;
   }
 
-  return `Connected.\n${playableCount.toLocaleString()} of ${detectedCount.toLocaleString()} detected ${folderLabel} are indexed and available for playback.\n\nTo add more albums, tag their FLAC/M4A files with MusicBrainz Picard, then rebuild the library index.`;
+  return `Connected.\n${playableCount.toLocaleString()} of your ${detectedCount.toLocaleString()} detected ${folderLabel} are indexed and available for playback.\n\nTo add more albums, tag their FLAC/M4A files with MusicBrainz Picard, then rebuild the library index.`;
 }
 
 function renderStatus(status) {
