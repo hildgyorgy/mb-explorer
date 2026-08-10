@@ -74,8 +74,9 @@ function rebuildLocalIndex() {
       if (releaseTrackKey && !tracksByReleaseTrack.has(releaseTrackKey)) {
         tracksByReleaseTrack.set(releaseTrackKey, localTrack);
       }
-      if (recordingKey && !tracksByRecording.has(recordingKey)) {
-        tracksByRecording.set(recordingKey, localTrack);
+      if (recordingKey) {
+        if (!tracksByRecording.has(recordingKey)) tracksByRecording.set(recordingKey, []);
+        tracksByRecording.get(recordingKey).push(localTrack);
       }
     }
 
@@ -185,11 +186,23 @@ export function getLocalTrack(releaseMbid, recordingMbid, releaseTrackMbid = "")
   const tracks = localTracksByRelease.get(mbidKey(releaseMbid));
   if (!tracks) return null;
 
-  return (
-    tracks.tracksByReleaseTrack.get(mbidKey(releaseTrackMbid)) ||
-    tracks.tracksByRecording.get(mbidKey(recordingMbid)) ||
-    null
-  );
+  const releaseTrackKey = mbidKey(releaseTrackMbid);
+  if (releaseTrackKey) {
+    const exactTrack = tracks.tracksByReleaseTrack.get(releaseTrackKey);
+    if (exactTrack) return exactTrack;
+  }
+
+  const recordingCandidates =
+    tracks.tracksByRecording.get(mbidKey(recordingMbid)) || [];
+
+  if (!releaseTrackKey) return recordingCandidates[0] || null;
+
+  // A known but different release-track MBID identifies another physical
+  // track/medium (for example the CD layer of a hybrid SACD). Recording MBID
+  // fallback is only safe when the indexed candidate has no release-track ID.
+  return recordingCandidates.find(
+    (candidate) => !mbidKey(candidate.track?.release_track_mbid)
+  ) || null;
 }
 
 function normalizeSearchText(value) {

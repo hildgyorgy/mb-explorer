@@ -135,6 +135,11 @@ Search normally in the same field used for MusicBrainz:
 - Hover over a track number and select the play icon.
 - The floating mini-player remains active while you explore another release.
 
+Playability is matched per track. An exact MusicBrainz release-track ID is
+preferred; recording ID is used only when release-track data is unavailable.
+This prevents another medium or layer of the same release from appearing
+playable merely because it uses the same recording.
+
 The release header shows how many tracks are available locally, for example
 `Local: 8 / 8 playable`.
 
