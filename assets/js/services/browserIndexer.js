@@ -535,7 +535,7 @@ async function collectDirectoryHandle(directoryHandle) {
 export async function chooseWritableMusicFolder() {
   if (typeof window.showDirectoryPicker !== "function") return null;
   const directoryHandle = await window.showDirectoryPicker({
-    id: "mb-release-player-music",
+    id: "musicbrainz-explorer-music",
     mode: "readwrite",
     startIn: "music",
   });
@@ -562,7 +562,7 @@ export async function saveIndexToDirectory(directoryHandle, json) {
 export async function saveIndexWithFilePicker(json) {
   if (typeof window.showSaveFilePicker !== "function") return false;
   const fileHandle = await window.showSaveFilePicker({
-    id: "mb-release-player-library-index",
+    id: "musicbrainz-explorer-library-index",
     suggestedName: "library.json",
     types: [{
       description: "MusicBrainz Explorer library index",

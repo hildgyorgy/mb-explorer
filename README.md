@@ -7,9 +7,9 @@ _version 0.2.0_
 A small, framework-free web app for exploring MusicBrainz releases and playing
 the matching files from your own music library.
 
-▶ [Open MusicBrainz Explorer](https://hildgyorgy.github.io/mb-release-player/)
+▶ [Open MusicBrainz Explorer](https://hildgyorgy.github.io/mb-explorer/)
 
-❔ [How to, support and privacy](https://hildgyorgy.github.io/mb-release-player/support.html)
+❔ [How to, support and privacy](https://hildgyorgy.github.io/mb-explorer/support.html)
 
 Built on the MusicBrainz API and Cover Art Archive. Designed for clear credits,
 calm navigation and an optional local playback layer.
@@ -201,10 +201,12 @@ assets/js/
 
 ## Project background
 
-MusicBrainz Explorer is an experimental spin-off of
-[MusicBrainz Release Viewer](https://hildgyorgy.github.io/mb-release-viewer/).
+MusicBrainz Explorer evolved from
+[MusicBrainz Release Viewer](https://github.com/hildgyorgy/mb-release-viewer)
+and its local-playback spin-off,
+[MusicBrainz Release Player](https://github.com/hildgyorgy/mb-release-player).
 It preserves the Viewer's release-focused interface and metadata presentation,
-then adds a local-library mapping and playback layer.
+then adds local-library mapping and playback.
 
 This is an independent project and is not affiliated with or endorsed by
 MusicBrainz or MetaBrainz.
