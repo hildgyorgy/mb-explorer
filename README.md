@@ -202,9 +202,9 @@ assets/js/
 ## Project background
 
 MusicBrainz Explorer evolved from
-[MusicBrainz Release Viewer](https://github.com/hildgyorgy/mb-release-viewer)
+MusicBrainz Release Viewer
 and its local-playback spin-off,
-[MusicBrainz Release Player](https://github.com/hildgyorgy/mb-release-player).
+MusicBrainz Release Player.
 It preserves the Viewer's release-focused interface and metadata presentation,
 then adds local-library mapping and playback.
 

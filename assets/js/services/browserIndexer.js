@@ -374,7 +374,7 @@ async function loadExistingLibrary(filesByPath) {
 
 function fileModifiedNs(file) {
   // File.lastModified has millisecond precision. Keep the v2 field in
-  // nanoseconds so indexes made by the browser, Python and MusiCards share
+  // nanoseconds so indexes made by the browser, Python and MusicBrainz Explorer share
   // the same schema. Values are compared with a one-millisecond tolerance.
   return Number(BigInt(Math.trunc(file.lastModified)) * 1_000_000n);
 }

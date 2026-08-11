@@ -13,7 +13,7 @@ INDEX_VERSION = 2
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description=(
-            "Create library.json for MusiCards from a "
+            "Create library.json for MusicBrainz Explorer from a "
             "Picard-tagged FLAC/M4A music folder."
         )
     )
