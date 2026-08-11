@@ -591,9 +591,12 @@ a:hover {
   line-height: 1.5;
 }
 
+.search-help-support-row {
+  margin-top: 9px;
+}
+
 .search-help-support {
   display: inline-block;
-  margin-top: 9px;
   font-size: 12px;
   font-weight: 600;
   opacity: 1;
