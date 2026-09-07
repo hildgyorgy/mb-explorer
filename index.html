@@ -81,6 +81,14 @@
                 </span>
                 <span class="onboarding-arrow" aria-hidden="true">→</span>
               </button>
+
+              <button class="onboarding-action" id="openNavidrome" type="button">
+                <span class="onboarding-copy">
+                  <strong>Connect Navidrome</strong>
+                  <span>to browse and play your server library.</span>
+                </span>
+                <span class="onboarding-arrow" aria-hidden="true">→</span>
+              </button>
             </div>
 
             <div class="local-library-start">
@@ -95,6 +103,26 @@
       </div>
     </div>
   </main>
+
+  <dialog class="search-help-dialog" id="navidromeDialog" aria-labelledby="navidromeTitle">
+    <div class="search-help-head">
+      <h2 id="navidromeTitle">Connect Navidrome</h2>
+      <button class="search-help-close" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
+    </div>
+    <form id="navidromeForm" class="navidrome-form">
+      <label>Name <input name="name" type="text" placeholder="Home Navidrome"></label>
+      <label>Server URL <input name="serverUrl" type="url" placeholder="https://music.example.com" required></label>
+      <label>Username <input name="username" type="text" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="local-library-status muted" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
+      <button class="onboarding-action" type="submit"><span class="onboarding-copy"><strong>Connect</strong><span>Server and username are remembered; the password is kept only for this page session.</span></span><span class="onboarding-arrow" aria-hidden="true">→</span></button>
+      <div class="renderer-probe">
+        <label>AVM device description URL <input id="rendererDescriptionUrl" type="url" placeholder="A bridge automatikusan felderíti"><small class="muted">A helyi MusiCards UPnP bridge végzi a felderítést és a vezérlést.</small></label>
+        <button class="pill" id="probeAvm" type="button">Connect AVM through bridge</button>
+        <p class="local-library-status muted" id="rendererStatus" role="status" aria-live="polite">Local bridge not connected.</p>
+      </div>
+    </form>
+  </dialog>
 
   <dialog class="search-help-dialog" id="searchHelpDialog" aria-labelledby="searchHelpTitle">
     <div class="search-help-head">

@@ -1,0 +1,8 @@
+services:
+  musicards-upnp-bridge:
+    build: .
+    container_name: musicards-upnp-bridge
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      MUSICARDS_BRIDGE_PORT: "9181"

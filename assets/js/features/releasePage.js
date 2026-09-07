@@ -22,6 +22,8 @@ import { bindTrackToggles } from "./tracks.js";
 import { bindComposerHeadersOnce } from "../ui/composerHeaders.js";
 import { getLocalAlbum, getLocalTrack } from "../services/localLibrary.js";
 import { bindTrackPlayback } from "./player.js";
+import { getActiveLibrarySource } from "../core/librarySource.js";
+import { getNavidromeAlbum, getNavidromeTrack, isNavidromeConnected, prepareNavidromeRelease } from "../services/navidrome.js";
 
 // ------------------------------------------------------------
 // Streaming links (moved to module level from Fix 4)
@@ -113,7 +115,7 @@ function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverIma
  * @param {{rel:Object, cover:string|null, covers:Array}} data
  * @param {(rgId:string)=>Promise<void>} [onLoadRelease] - called when artist panel discography item is clicked
  */
-export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, onNavigateToRelease) {
+export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, onNavigateToRelease) {
   const title = rel.title || "(untitled)";
   const artist = artistCreditToText(rel["artist-credit"]);
   const date = rel.date || rel["release-events"]?.[0]?.date || "";
@@ -148,15 +150,21 @@ export function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, on
   // Build flat track list for toggle binding
   const media = rel.media || [];
   const flatTracks = [];
-  const localAlbum = getLocalAlbum(rel.id);
+  let localAlbum = getLocalAlbum(rel.id);
+  const activeSource = getActiveLibrarySource();
+  if (activeSource === "navidrome" && isNavidromeConnected()) {
+    localAlbum = await prepareNavidromeRelease(rel.id) || getNavidromeAlbum(rel.id);
+  }
   let localTrackCount = 0;
 
   const mediaWithTracks = media.map((m, mi) => {
     const mt = (m.tracks || []).map((t) => {
       const localTrack = localAlbum
-        ? getLocalTrack(rel.id, t.recording?.id, t.id)
+        ? activeSource === "navidrome"
+          ? getNavidromeTrack(rel.id, t.recording?.id)
+          : getLocalTrack(rel.id, t.recording?.id, t.id)
         : null;
-      const isLocal = !!localTrack?.file;
+      const isLocal = !!(localTrack?.file || localTrack?.playbackUrl);
       if (isLocal) localTrackCount += 1;
 
       const obj = {

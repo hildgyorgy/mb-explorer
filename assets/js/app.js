@@ -13,6 +13,7 @@ import { renderReleasePage } from "./features/releasePage.js";
 import { createMobileHeaderController } from "./ui/mobileHeader.js";
 import { bindLocalLibraryPicker } from "./services/localLibrary.js";
 import { leaveTrackPlaybackView } from "./features/player.js";
+import { bindNavidromePicker } from "./services/navidrome.js";
 
 // ------------------------------
 // Loading / navigation
@@ -34,6 +35,7 @@ export const App = Object.freeze({
 
     const bindHomeActions = () => {
       bindLocalLibraryPicker(document);
+      bindNavidromePicker(document);
 
       const helpDialog = document.getElementById("searchHelpDialog");
       const helpOpen = document.getElementById("searchHelpOpen");

@@ -42,7 +42,7 @@ export function createReleaseNavigator({ getOut, loadRelease, renderReleasePage 
     try {
       const data = await loadRelease(mbid);
 
-      renderReleasePage(out, data);
+      await renderReleasePage(out, data);
 
       setOmniLoadedValue(mbid);
       setUrlMbid(mbid);

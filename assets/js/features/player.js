@@ -1,6 +1,9 @@
 /* ============================================================
-   Local audio playback
+   Browser and remote playback
    ============================================================ */
+
+import { getActiveLibrarySource } from "../core/librarySource.js";
+import { getRenderer, setCurrentAndNext, setNext, playRenderer, callRenderer, getRendererState, didlMetadata } from "../services/upnpRenderer.js";
 
 const audio = new Audio();
 let objectUrl = "";
@@ -11,6 +14,40 @@ let viewedTracks = [];
 let miniPlayer = null;
 let viewedCoverImages = null;
 let currentCoverImages = null;
+let remotePlaying = false;
+let remoteStateTimer = null;
+let remoteCurrentTime = 0;
+let remoteDuration = 0;
+
+function playbackSource(entry) {
+  const localTrack = entry?.localTrack;
+  if (localTrack?.file) return { kind: "file", value: localTrack.file };
+  if (localTrack?.playbackUrl) return { kind: "url", value: localTrack.playbackUrl };
+  return null;
+}
+
+function remotePlaybackEnabled(entry) {
+  return getActiveLibrarySource() === "navidrome" &&
+    getRenderer()?.mode === "bridge" &&
+    !!entry?.localTrack?.playbackUrl;
+}
+
+function remoteItem(entry) {
+  const track = entry.localTrack?.track || {};
+  const album = entry.localTrack?.album || {};
+  const uri = entry.localTrack.playbackUrl;
+  return {
+    uri,
+    metadata: didlMetadata({
+      id: track.providerItemId || track.track_mbid || track.recording_mbid || uri,
+      title: entry.title || track.title || "Navidrome track",
+      artist: entry.artist || album.artist_name || track.artist || "",
+      album: album.album_name || track.album || "",
+      mime: track.contentType || "audio/flac",
+      duration: track.duration || "",
+    }, uri),
+  };
+}
 
 const ICONS = {
   previous: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5v14M18 6l-8 6 8 6V6z"/></svg>`,
@@ -194,15 +231,26 @@ function ensureMiniPlayer() {
     if (action === "toggle") {
       if (currentIndex >= 0) await playIndex(currentIndex);
       else {
-        const firstPlayableIndex = viewedTracks.findIndex((entry) => entry?.localTrack?.file);
+        const firstPlayableIndex = viewedTracks.findIndex((entry) => playbackSource(entry));
         if (firstPlayableIndex >= 0) await playViewedIndex(firstPlayableIndex);
       }
     }
   });
 
-  miniPlayer.querySelector(".mini-player-progress").addEventListener("input", (event) => {
+  miniPlayer.querySelector(".mini-player-progress").addEventListener("input", async (event) => {
     const nextTime = Number(event.target.value);
-    if (Number.isFinite(nextTime)) audio.currentTime = nextTime;
+    if (!Number.isFinite(nextTime)) return;
+    if (remotePlaybackEnabled(currentTracks[currentIndex])) {
+      const remote = getRenderer();
+      if (remote?.mode === "bridge") {
+        await fetch(`${remote.bridgeUrl}/renderers/${encodeURIComponent(remote.id)}/seek`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seconds: nextTime }),
+        });
+        remoteCurrentTime = nextTime;
+        syncMiniPlayer();
+      }
+    } else audio.currentTime = nextTime;
   });
 
   document.body.appendChild(miniPlayer);
@@ -212,9 +260,9 @@ function ensureMiniPlayer() {
 function syncMiniPlayer() {
   const player = ensureMiniPlayer();
   const entry = currentTracks[currentIndex];
-  const hasTrack = currentIndex >= 0 && !!entry?.localTrack?.file;
+  const hasTrack = currentIndex >= 0 && !!playbackSource(entry);
   const playableTrackCount = viewedTracks.reduce(
-    (count, item) => count + (item?.localTrack?.file ? 1 : 0),
+    (count, item) => count + (playbackSource(item) ? 1 : 0),
     0
   );
   const hasPlayableTracks = playableTrackCount > 0;
@@ -224,7 +272,7 @@ function syncMiniPlayer() {
   document.body.classList.toggle("has-mini-player", shouldShowPlayer);
   if (!shouldShowPlayer) return;
 
-  const isPlaying = hasTrack && !audio.paused && !audio.ended;
+  const isPlaying = hasTrack && (remotePlaybackEnabled(entry) ? remotePlaying : (!audio.paused && !audio.ended));
   const toggle = player.querySelector(".mini-player-toggle");
   toggle.innerHTML = isPlaying ? ICONS.pause : ICONS.play;
   toggle.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
@@ -235,12 +283,12 @@ function syncMiniPlayer() {
   next.disabled = !hasTrack;
 
   const progress = player.querySelector(".mini-player-progress");
-  progress.disabled = !hasTrack;
+  progress.disabled = !hasTrack || remotePlaybackEnabled(entry);
 
   if (!hasTrack) {
     player.querySelector(".mini-player-title").textContent = "Ready to play";
     player.querySelector(".mini-player-artist").textContent =
-      `${playableTrackCount.toLocaleString()} local ${playableTrackCount === 1 ? "track" : "tracks"}`;
+      `${playableTrackCount.toLocaleString()} available ${playableTrackCount === 1 ? "track" : "tracks"}`;
     player.querySelector(".mini-player-quality").textContent = "";
     progress.max = "0";
     progress.value = "0";
@@ -252,14 +300,14 @@ function syncMiniPlayer() {
   }
 
   player.querySelector(".mini-player-title").textContent =
-    entry.title || entry.localTrack.track?.title || entry.localTrack.file.name;
+    entry.title || entry.localTrack.track?.title || entry.localTrack.file?.name || "";
   player.querySelector(".mini-player-artist").textContent =
     entry.localTrack.album?.artist_name || "";
   player.querySelector(".mini-player-quality").textContent =
     formatSourceQuality(entry.localTrack.track);
 
-  const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-  const currentTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+  const duration = remotePlaybackEnabled(entry) ? remoteDuration : (Number.isFinite(audio.duration) ? audio.duration : 0);
+  const currentTime = remotePlaybackEnabled(entry) ? remoteCurrentTime : (Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
   progress.max = String(duration);
   progress.value = String(Math.min(currentTime, duration || currentTime));
   progress.style.setProperty(
@@ -288,9 +336,12 @@ function syncPlayerUi() {
       const viewedEntry = viewedTracks[index];
       const viewedPath = viewedEntry?.localTrack?.relativePath || "";
       const viewedFile = viewedEntry?.localTrack?.file || null;
+      const activeUrl = activeEntry?.localTrack?.playbackUrl || "";
+      const viewedUrl = viewedEntry?.localTrack?.playbackUrl || "";
       const isCurrent = !!activeEntry && (
         (activePath && viewedPath === activePath) ||
-        (!activePath && activeFile && viewedFile === activeFile)
+        (!activePath && activeFile && viewedFile === activeFile) ||
+        (!activePath && !activeFile && activeUrl && viewedUrl === activeUrl)
       );
       const isPlaying = isCurrent && !audio.paused && !audio.ended;
       const row = button.closest("tr.track");
@@ -319,8 +370,30 @@ function clearCurrentPlayback() {
 
 async function playIndex(index) {
   const entry = currentTracks[index];
-  const file = entry?.localTrack?.file;
-  if (!file) return;
+  const source = playbackSource(entry);
+  if (!source) return;
+
+  if (remotePlaybackEnabled(entry)) {
+    if (currentIndex === index) {
+      try {
+        if (remotePlaying) { await callRenderer("Pause"); remotePlaying = false; }
+        else { await playRenderer(); remotePlaying = true; }
+      } catch (error) { console.warn("Could not control remote renderer:", error); }
+      syncPlayerUi();
+      return;
+    }
+    const nextEntry = currentTracks.slice(index + 1).find((item) => remotePlaybackEnabled(item));
+    const remoteItems = currentTracks.slice(index).filter((item) => remotePlaybackEnabled(item)).map(remoteItem);
+    await setCurrentAndNext(remoteItem(entry), nextEntry ? remoteItem(nextEntry) : null, remoteItems);
+    currentIndex = index;
+    remotePlaying = true;
+    startRemoteStatePolling();
+    syncPlayerUi();
+    updateMediaSessionMetadata(entry);
+    try { await playRenderer(); }
+    catch (error) { console.warn("Could not start remote playback:", error); }
+    return;
+  }
 
   if (currentIndex === index) {
     try {
@@ -336,9 +409,9 @@ async function playIndex(index) {
   audio.pause();
   releaseObjectUrl();
 
-  objectUrl = URL.createObjectURL(file);
+  objectUrl = source.kind === "file" ? URL.createObjectURL(source.value) : "";
   currentIndex = index;
-  audio.src = objectUrl;
+  audio.src = source.kind === "file" ? objectUrl : source.value;
   syncPlayerUi();
   updateMediaSessionMetadata(entry);
 
@@ -350,17 +423,53 @@ async function playIndex(index) {
   }
 }
 
+function startRemoteStatePolling() {
+  if (remoteStateTimer) return;
+  remoteStateTimer = window.setInterval(async () => {
+    if (!getRenderer() || currentIndex < 0) return;
+    try {
+      const state = await getRendererState();
+      remotePlaying = state.CurrentTransportState === "PLAYING";
+      remoteCurrentTime = parseClock(state.RelTime);
+      remoteDuration = parseClock(state.TrackDuration);
+      const remoteUri = state.CurrentURI || "";
+      const remoteIndex = currentTracks.findIndex((item) => item?.localTrack?.playbackUrl === remoteUri);
+      if (remoteIndex >= 0 && remoteIndex !== currentIndex) {
+        currentIndex = remoteIndex;
+        const nextEntry = currentTracks.slice(remoteIndex + 1).find((item) => remotePlaybackEnabled(item));
+        if (nextEntry) {
+          await setNext(remoteItem(nextEntry));
+        }
+        if (!remotePlaying) {
+          try { await playRenderer(); remotePlaying = true; } catch (error) { console.debug("Could not resume remote queue:", error); }
+        }
+        updateMediaSessionMetadata(currentTracks[remoteIndex]);
+      }
+      syncMiniPlayer();
+    } catch (error) { console.debug("Remote renderer state unavailable:", error); }
+  }, 1000);
+}
+
+function parseClock(value) {
+  const parts = String(value || "").split(":").map(Number);
+  if (parts.length !== 3 || parts.some((part) => !Number.isFinite(part))) return 0;
+  return parts[0] * 3600 + parts[1] * 60 + parts[2];
+}
+
 async function playViewedIndex(index) {
   const entry = viewedTracks[index];
-  const file = entry?.localTrack?.file;
-  if (!file) return;
+  const source = playbackSource(entry);
+  if (!source) return;
 
   const activeEntry = currentTracks[currentIndex];
   const activePath = activeEntry?.localTrack?.relativePath || "";
   const viewedPath = entry.localTrack?.relativePath || "";
+  const activeUrl = activeEntry?.localTrack?.playbackUrl || "";
+  const viewedUrl = entry.localTrack?.playbackUrl || "";
   const isCurrentFile =
     (activePath && viewedPath === activePath) ||
-    (!activePath && activeEntry?.localTrack?.file === file);
+    (!activePath && activeEntry && playbackSource(activeEntry)?.value === source.value) ||
+    (!activePath && !activeEntry?.localTrack?.file && activeUrl && activeUrl === viewedUrl);
 
   if (isCurrentFile) {
     await playIndex(currentIndex);
@@ -377,7 +486,7 @@ async function playViewedIndex(index) {
 
 function playNextLocalTrack() {
   for (let index = currentIndex + 1; index < currentTracks.length; index += 1) {
-    if (currentTracks[index]?.localTrack?.file) {
+    if (playbackSource(currentTracks[index])) {
       playIndex(index);
       return;
     }
@@ -392,7 +501,7 @@ function playPreviousLocalTrack() {
     return;
   }
   for (let index = currentIndex - 1; index >= 0; index -= 1) {
-    if (currentTracks[index]?.localTrack?.file) {
+    if (playbackSource(currentTracks[index])) {
       playIndex(index);
       return;
     }

@@ -10,6 +10,7 @@ import {
   saveIndexToDirectory,
   saveIndexWithFilePicker,
 } from "./browserIndexer.js";
+import { setActiveLibrarySource } from "../core/librarySource.js";
 
 let selectedFilesByPath = new Map();
 let selectedLibrary = null;
@@ -304,6 +305,7 @@ export function bindLocalLibraryPicker(root = document) {
   button.addEventListener("click", () => input.click());
 
   input.addEventListener("change", async () => {
+    setActiveLibrarySource("local");
     storeSelectedFiles(input.files);
     selectedLibrary = null;
     rebuildLocalIndex();

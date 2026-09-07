@@ -614,6 +614,47 @@ a:hover {
   white-space: pre-line;
 }
 
+.navidrome-form {
+  display: grid;
+  gap: 12px;
+  padding: 8px 0 0;
+}
+
+.navidrome-form label {
+  display: grid;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.navidrome-form input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.renderer-probe {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.renderer-probe > button {
+  justify-self: start;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
 @media (max-width: 640px) {
   .empty-state {
     place-items: start;

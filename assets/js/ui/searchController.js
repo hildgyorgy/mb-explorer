@@ -3,14 +3,17 @@ import { STATE, setSearchState } from "../core/state.js";
 import { extractMBID, debounce, escAttr, escHtml } from "../core/util.js";
 import { searchReleases } from "../services/api.js";
 import { searchLocalLibrary } from "../services/localLibrary.js";
+import { getActiveLibrarySource } from "../core/librarySource.js";
+import { searchNavidromeLibrary } from "../services/navidrome.js";
 
 const $ = (id) => document.getElementById(id);
 let searchClickOutsideBound = false;
 
 function renderResultItem(it, i, isActive) {
+  const isLibrary = it.source === "local" || it.source === "navidrome";
   const isLocal = it.source === "local";
   return `
-    <div class="result ${isLocal ? "is-local" : ""} ${isActive ? "is-active" : ""}" data-i="${escAttr(i)}">
+    <div class="result ${isLibrary ? "is-library" : ""} ${isLocal ? "is-local" : "is-navidrome"} ${isActive ? "is-active" : ""}" data-i="${escAttr(i)}">
       <img
         class="res-thumb"
         src="${escAttr(`https://coverartarchive.org/release/${it.mbid}/front-250`)}"
@@ -21,7 +24,7 @@ function renderResultItem(it, i, isActive) {
       />
       <div class="res-text">
         <div class="res-title">
-          ${isLocal ? `<span class="res-local-play" aria-hidden="true"></span>` : ""}
+          ${isLibrary ? `<span class="res-local-play" aria-hidden="true"></span>` : ""}
           <span>${escHtml(it.title)}</span>
         </div>
         <div class="sub">${escHtml(it.sub || "")}</div>
@@ -108,8 +111,10 @@ export function createSearchController({ onGoByMbid, onGoFallback }) {
     const requestId = STATE.search.req + 1;
     setSearchState({ req: requestId });
 
-    const localItems = searchLocalLibrary(val, CONFIG.SEARCH_LIMIT);
-    if (localItems.length) renderSearchResults(localItems);
+    const libraryItems = getActiveLibrarySource() === "navidrome"
+      ? searchNavidromeLibrary(val, CONFIG.SEARCH_LIMIT)
+      : searchLocalLibrary(val, CONFIG.SEARCH_LIMIT);
+    if (libraryItems.length) renderSearchResults(libraryItems);
     else resEl.innerHTML = `<div class="result"><span class="muted">Searching…</span></div>`;
 
     try {
@@ -117,7 +122,7 @@ export function createSearchController({ onGoByMbid, onGoFallback }) {
       if (requestId !== STATE.search.req) return;
 
       const remoteByMbid = new Map(remoteItems.map((item) => [item.mbid, item]));
-      const enrichedLocalItems = localItems.map((item) => ({
+      const enrichedLocalItems = libraryItems.map((item) => ({
         ...item,
         sub: item.sub || remoteByMbid.get(item.mbid)?.sub || "",
       }));
@@ -128,7 +133,7 @@ export function createSearchController({ onGoByMbid, onGoFallback }) {
       renderSearchResults(merged.slice(0, CONFIG.SEARCH_LIMIT));
     } catch {
       if (requestId !== STATE.search.req) return;
-      if (localItems.length) renderSearchResults(localItems);
+      if (libraryItems.length) renderSearchResults(libraryItems);
       else resEl.innerHTML = `<div class="result"><span class="muted">Search error</span></div>`;
     }
   }, CONFIG.SEARCH_DEBOUNCE_MS);
