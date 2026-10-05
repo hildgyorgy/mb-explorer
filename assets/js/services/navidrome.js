@@ -1,5 +1,6 @@
 import { setActiveLibrarySource } from "../core/librarySource.js";
 import { loadBridgeRenderer } from "./upnpRenderer.js";
+import { matchNavidromeTrack, positiveInteger } from "./navidromeMatching.mjs";
 
 const API_VERSION = "1.16.1";
 const CLIENT_NAME = "MusicBrainzExplorer";
@@ -121,6 +122,8 @@ function mapAlbum(album, songs = null) {
       providerItemId: song.id,
       title: song.title || "Untitled track",
       track_mbid: canonicalMbid(song.musicBrainzId),
+      discNumber: positiveInteger(song.discNumber),
+      trackNumber: positiveInteger(song.track),
       release_track_mbid: null,
       codec: String(song.suffix || "").toUpperCase(),
       bit_depth: song.bitDepth,
@@ -144,11 +147,12 @@ export function getNavidromeAlbum(releaseMbid) {
   return albumsByRelease.get(key(releaseMbid)) || null;
 }
 
-export function getNavidromeTrack(releaseMbid, recordingMbid) {
+export function getNavidromeTrack(releaseMbid, recordingMbid, mediumPosition, trackPosition, uniqueRecording) {
   const candidates = tracksByRelease.get(key(releaseMbid))?.get(key(recordingMbid)) || [];
-  if (candidates.length !== 1) return null;
+  const matched = matchNavidromeTrack(candidates, mediumPosition, trackPosition, uniqueRecording);
+  if (!matched) return null;
   const album = getNavidromeAlbum(releaseMbid);
-  return { album, track: candidates[0], playbackUrl: candidates[0].playbackUrl };
+  return { album, track: matched, playbackUrl: matched.playbackUrl };
 }
 
 function normalizeText(value) {

@@ -149,6 +149,11 @@ export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelea
 
   // Build flat track list for toggle binding
   const media = rel.media || [];
+  const recordingCounts = new Map();
+  media.forEach((medium) => (medium.tracks || []).forEach((track) => {
+    const recordingId = track.recording?.id;
+    if (recordingId) recordingCounts.set(recordingId, (recordingCounts.get(recordingId) || 0) + 1);
+  }));
   const flatTracks = [];
   let localAlbum = getLocalAlbum(rel.id);
   const activeSource = getActiveLibrarySource();
@@ -161,7 +166,8 @@ export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelea
     const mt = (m.tracks || []).map((t) => {
       const localTrack = localAlbum
         ? activeSource === "navidrome"
-          ? getNavidromeTrack(rel.id, t.recording?.id)
+          ? getNavidromeTrack(rel.id, t.recording?.id, m.position ?? mi + 1, t.position,
+            recordingCounts.get(t.recording?.id) === 1)
           : getLocalTrack(rel.id, t.recording?.id, t.id)
         : null;
       const isLocal = !!(localTrack?.file || localTrack?.playbackUrl);
