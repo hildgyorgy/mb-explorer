@@ -164,10 +164,14 @@ export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelea
 
   const mediaWithTracks = media.map((m, mi) => {
     const mt = (m.tracks || []).map((t) => {
+      // On multi-medium releases (including hybrid SACDs), recording identity
+      // alone cannot identify the physical layer. Require disc + track there.
+      const allowRecordingFallback = media.length === 1 &&
+        recordingCounts.get(t.recording?.id) === 1;
       const localTrack = localAlbum
         ? activeSource === "navidrome"
           ? getNavidromeTrack(rel.id, t.recording?.id, m.position ?? mi + 1, t.position,
-            recordingCounts.get(t.recording?.id) === 1)
+            allowRecordingFallback)
           : getLocalTrack(rel.id, t.recording?.id, t.id)
         : null;
       const isLocal = !!(localTrack?.file || localTrack?.playbackUrl);
