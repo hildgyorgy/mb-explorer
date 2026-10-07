@@ -551,6 +551,29 @@ a:hover {
   -webkit-backdrop-filter: blur(5px);
 }
 
+.navidrome-inventory-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(80vh, 800px);
+  overflow-y: auto;
+}
+
+.navidrome-inventory-dialog h3 {
+  margin: 22px 0 8px;
+  font-size: 0.95rem;
+}
+
+.navidrome-inventory-list {
+  margin: 0;
+  padding-left: 24px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.navidrome-inventory-list:empty::after {
+  content: "No albums";
+  color: var(--muted);
+}
+
 .search-help-head {
   display: flex;
   align-items: center;

@@ -10,6 +10,7 @@ const SAVED_PROFILE_KEY = "musicards.navidrome.profile";
 let profile = null;
 let password = "";
 let catalog = [];
+let albumInventory = [];
 let albumsByRelease = new Map();
 let tracksByRelease = new Map();
 let navidromeError = "";
@@ -190,6 +191,7 @@ export async function connectNavidrome({ name, serverUrl, username, userPassword
   password = String(userPassword);
   navidromeError = "";
   catalog = [];
+  albumInventory = [];
   albumsByRelease = new Map();
   tracksByRelease = new Map();
 
@@ -203,6 +205,11 @@ export async function connectNavidrome({ name, serverUrl, username, userPassword
       const result = await request("getAlbumList2", { type: "alphabeticalByName", offset, size: PAGE_SIZE });
       const albums = result.albumList2?.album || [];
       albums.forEach((album) => {
+        albumInventory.push({
+          artist: album.artist || album.displayArtist || "Unknown artist",
+          title: album.name || album.title || "Untitled album",
+          mbid: canonicalMbid(album.musicBrainzId),
+        });
         const mapped = mapAlbum(album);
         if (mapped && !albumsByRelease.has(mapped.album_mbid)) albumsByRelease.set(mapped.album_mbid, mapped);
       });
@@ -211,7 +218,7 @@ export async function connectNavidrome({ name, serverUrl, username, userPassword
     catalog = [...albumsByRelease.values()];
     try { localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(nextProfile)); } catch (error) { /* storage may be unavailable */ }
     setActiveLibrarySource("navidrome");
-    return { profile, albumCount: catalog.length };
+    return { profile, albumCount: catalog.length, totalAlbumCount: albumInventory.length };
   } catch (error) {
     disconnectNavidrome();
     throw error;
@@ -236,7 +243,7 @@ export async function prepareNavidromeRelease(releaseMbid) {
 }
 
 export function disconnectNavidrome() {
-  profile = null; password = ""; catalog = []; albumsByRelease = new Map(); tracksByRelease = new Map(); navidromeError = "";
+  profile = null; password = ""; catalog = []; albumInventory = []; albumsByRelease = new Map(); tracksByRelease = new Map(); navidromeError = "";
   setActiveLibrarySource("local");
 }
 
@@ -248,6 +255,10 @@ export function bindNavidromePicker(root = document) {
   const probeButton = root.getElementById("probeAvm");
   const rendererUrl = root.getElementById("rendererDescriptionUrl");
   const rendererStatus = root.getElementById("rendererStatus");
+  const inventoryButton = root.getElementById("showNavidromeInventory");
+  const inventoryDialog = root.getElementById("navidromeInventoryDialog");
+  const identifiedList = root.getElementById("navidromeIdentifiedAlbums");
+  const untaggedList = root.getElementById("navidromeUntaggedAlbums");
   if (!open || !dialog || !form || !status || open.dataset.bound === "1") return;
   open.dataset.bound = "1";
   try {
@@ -259,7 +270,35 @@ export function bindNavidromePicker(root = document) {
     }
   } catch (error) { /* ignore malformed or unavailable local storage */ }
   status.textContent = getNavidromeStatus();
+  if (inventoryButton) inventoryButton.hidden = !profile;
   open.addEventListener("click", () => dialog.showModal());
+  inventoryButton?.addEventListener("click", () => {
+    if (!profile || !inventoryDialog || !identifiedList || !untaggedList) return;
+    const identified = albumInventory.filter((album) => album.mbid);
+    const untagged = albumInventory.filter((album) => !album.mbid);
+    root.getElementById("navidromeIdentifiedCount").textContent = String(identified.length);
+    root.getElementById("navidromeUntaggedCount").textContent = String(untagged.length);
+    const addRows = (list, albums, linked) => {
+      list.replaceChildren();
+      for (const album of albums) {
+        const item = root.createElement("li");
+        const name = `${album.artist} — ${album.title}`;
+        if (linked) {
+          const link = root.createElement("a");
+          link.href = `https://musicbrainz.org/release/${album.mbid}`;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.textContent = name;
+          item.append(link);
+        } else item.textContent = name;
+        list.append(item);
+      }
+    };
+    addRows(identifiedList, identified, true);
+    addRows(untaggedList, untagged, false);
+    dialog.close();
+    inventoryDialog.showModal();
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = form.querySelector("button[type=submit]");
@@ -268,7 +307,8 @@ export function bindNavidromePicker(root = document) {
       const data = new FormData(form);
       const result = await connectNavidrome({ name: data.get("name"), serverUrl: data.get("serverUrl"), username: data.get("username"), userPassword: data.get("password") });
       status.classList.remove("err");
-      status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified albums.`;
+      status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
+      if (inventoryButton) inventoryButton.hidden = false;
       dialog.close();
     } catch (error) {
       navidromeError = error?.message || "Could not connect to Navidrome.";
