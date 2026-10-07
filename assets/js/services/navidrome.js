@@ -274,8 +274,12 @@ export function bindNavidromePicker(root = document) {
   open.addEventListener("click", () => dialog.showModal());
   inventoryButton?.addEventListener("click", () => {
     if (!profile || !inventoryDialog || !identifiedList || !untaggedList) return;
-    const identified = albumInventory.filter((album) => album.mbid);
-    const untagged = albumInventory.filter((album) => !album.mbid);
+    const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+    const byArtistAndTitle = (a, b) => collator.compare(a.artist, b.artist)
+      || collator.compare(a.title, b.title)
+      || collator.compare(a.mbid, b.mbid);
+    const identified = albumInventory.filter((album) => album.mbid).sort(byArtistAndTitle);
+    const untagged = albumInventory.filter((album) => !album.mbid).sort(byArtistAndTitle);
     root.getElementById("navidromeIdentifiedCount").textContent = String(identified.length);
     root.getElementById("navidromeUntaggedCount").textContent = String(untagged.length);
     const addRows = (list, albums, linked) => {
