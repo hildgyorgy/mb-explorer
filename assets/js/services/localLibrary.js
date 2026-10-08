@@ -5,6 +5,7 @@
 import {
   buildLibraryIndex,
   chooseWritableMusicFolder,
+  collectDirectoryHandle,
   collectInputFiles,
   downloadIndex,
   downloadReport,
@@ -21,7 +22,71 @@ let localLibraryReport = null;
 let libraryError = "";
 let localAlbumsByMbid = new Map();
 let localTracksByRelease = new Map();
+let rememberedDirectoryHandle = null;
 const SUPPORTED_AUDIO_EXTENSIONS = [".flac", ".m4a"];
+const FOLDER_DB_NAME = "musicbrainz-explorer";
+const FOLDER_STORE_NAME = "handles";
+const FOLDER_HANDLE_KEY = "local-music-folder";
+const FOLDER_NAME_KEY = "musicbrainz-explorer.local-folder-name";
+let rememberedFolderName = (() => {
+  try { return localStorage.getItem(FOLDER_NAME_KEY) || ""; } catch (error) { return ""; }
+})();
+
+function rememberFolderName(name) {
+  rememberedFolderName = String(name || "").trim();
+  try {
+    if (rememberedFolderName) localStorage.setItem(FOLDER_NAME_KEY, rememberedFolderName);
+  } catch (error) { /* storage may be unavailable */ }
+}
+
+function openFolderDatabase() {
+  if (typeof indexedDB === "undefined") return Promise.resolve(null);
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(FOLDER_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(FOLDER_STORE_NAME)) {
+        request.result.createObjectStore(FOLDER_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveDirectoryHandle(handle) {
+  if (!handle) return;
+  const database = await openFolderDatabase();
+  if (!database) return;
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction(FOLDER_STORE_NAME, "readwrite");
+    transaction.objectStore(FOLDER_STORE_NAME).put(handle, FOLDER_HANDLE_KEY);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  database.close();
+}
+
+async function loadDirectoryHandle() {
+  const database = await openFolderDatabase();
+  if (!database) return null;
+  const handle = await new Promise((resolve, reject) => {
+    const transaction = database.transaction(FOLDER_STORE_NAME, "readonly");
+    const request = transaction.objectStore(FOLDER_STORE_NAME).get(FOLDER_HANDLE_KEY);
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+  database.close();
+  return handle;
+}
+
+async function directoryPermission(handle, request = false) {
+  if (!handle?.queryPermission) return "granted";
+  let permission = await handle.queryPermission({ mode: "read" });
+  if (permission === "prompt" && request && handle.requestPermission) {
+    permission = await handle.requestPermission({ mode: "read" });
+  }
+  return permission;
+}
 
 function notifyLibraryState() {
   window.dispatchEvent(new CustomEvent("music-library-state-change", { detail: { source: "local" } }));
@@ -37,18 +102,6 @@ function normalizeRelativePath(file) {
 
   // Folder inputs include the selected root folder as the first segment.
   return parts.length > 1 ? parts.slice(1).join("/") : parts.join("/");
-}
-
-function storeSelectedFiles(fileList) {
-  const next = new Map();
-
-  for (const file of Array.from(fileList || [])) {
-    const path = normalizeRelativePath(file);
-    if (path) next.set(path, file);
-  }
-
-  selectedFilesByPath = next;
-  return selectedFilesByPath.size;
 }
 
 function storeSelectedFileMap(filesByPath) {
@@ -212,7 +265,11 @@ function renderLocalLibraryReport(root) {
 
 function statusText() {
   if (libraryError) return libraryError;
-  if (!selectedLibrary) return "Your Music folder is not connected.";
+  if (!selectedLibrary) {
+    return rememberedFolderName
+      ? `Your previous Music folder “${rememberedFolderName}” is remembered. Select Connect Music Folder to restore access.`
+      : "Your Music folder is not connected.";
+  }
 
   const detectedCount = detectedAlbumFolderCount();
   const playableCount = playableAlbumCount();
@@ -252,6 +309,7 @@ export function getLocalLibrarySummary() {
     identifiedAlbumCount: selectedLibrary?.length || 0,
     detectedAlbumCount: detectedAlbumFolderCount(),
     playableAlbumCount: playableAlbumCount(),
+    remembered: !!rememberedDirectoryHandle || !!rememberedFolderName,
     hasReport: !!localLibraryReport,
     reportCounts,
   };
@@ -396,11 +454,9 @@ export function bindLocalLibraryPicker(root = document) {
   };
   reportButton?.addEventListener("click", showReport);
 
-  button.addEventListener("click", () => input.click());
-
-  input.addEventListener("change", async () => {
-    setActiveLibrarySource("local");
-    storeSelectedFiles(input.files);
+  async function connectFileMap(filesByPath, { activate = true } = {}) {
+    if (activate) setActiveLibrarySource("local");
+    storeSelectedFileMap(filesByPath);
     selectedLibrary = null;
     localLibraryReport = null;
     rebuildLocalIndex();
@@ -420,6 +476,50 @@ export function bindLocalLibraryPicker(root = document) {
     renderStatus(status);
     if (reportButton) reportButton.hidden = !localLibraryReport;
     notifyLibraryState();
+  }
+
+  button.addEventListener("click", async () => {
+    if (rememberedDirectoryHandle) {
+      try {
+        const permission = await directoryPermission(rememberedDirectoryHandle, true);
+        if (permission === "granted") {
+          status.textContent = "Reading the saved Music folder…";
+          await connectFileMap(await collectDirectoryHandle(rememberedDirectoryHandle));
+          return;
+        }
+      } catch (error) {
+        console.warn("Could not reopen the saved Music folder:", error);
+      }
+    }
+    if (typeof window.showDirectoryPicker === "function") {
+      try {
+        rememberedDirectoryHandle = await window.showDirectoryPicker({
+          id: "musicbrainz-explorer-music",
+          mode: "read",
+          startIn: "music",
+        });
+        rememberFolderName(rememberedDirectoryHandle.name);
+        try { await saveDirectoryHandle(rememberedDirectoryHandle); } catch (error) { console.warn("Could not remember the Music folder:", error); }
+        status.textContent = "Reading library.json…";
+        await connectFileMap(await collectDirectoryHandle(rememberedDirectoryHandle));
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        console.warn("Could not open the Music folder with persistent access:", error);
+      }
+    }
+    input.click();
+  });
+
+  input.addEventListener("change", async () => {
+    const firstRelativePath = String(input.files?.[0]?.webkitRelativePath || "");
+    rememberFolderName(firstRelativePath.split("/").filter(Boolean)[0]);
+    const files = new Map();
+    for (const file of Array.from(input.files || [])) {
+      const path = normalizeRelativePath(file);
+      if (path) files.set(path, file);
+    }
+    await connectFileMap(files);
   });
 
   async function createIndex(filesByPath, directoryHandle = null) {
@@ -448,6 +548,9 @@ export function bindLocalLibraryPicker(root = document) {
       }
 
       if (directoryHandle) {
+        rememberedDirectoryHandle = directoryHandle;
+        rememberFolderName(directoryHandle.name);
+        try { await saveDirectoryHandle(directoryHandle); } catch (error) { console.warn("Could not remember the Music folder:", error); }
         await saveIndexToDirectory(directoryHandle, json);
         await saveReportToDirectory(directoryHandle, reportJson);
         status.textContent = `library.json and library-report.json saved in the selected Music folder.\n${summary}`;
@@ -498,7 +601,25 @@ export function bindLocalLibraryPicker(root = document) {
 
   indexInput.addEventListener("change", async () => {
     if (indexInput.files?.length) {
+      const firstRelativePath = String(indexInput.files[0]?.webkitRelativePath || "");
+      rememberFolderName(firstRelativePath.split("/").filter(Boolean)[0]);
       await createIndex(collectInputFiles(indexInput.files));
     }
   });
+
+  (async () => {
+    try {
+      rememberedDirectoryHandle = await loadDirectoryHandle();
+      if (!rememberedDirectoryHandle) return;
+      rememberFolderName(rememberedDirectoryHandle.name);
+      if (await directoryPermission(rememberedDirectoryHandle) === "granted") {
+        status.textContent = "Restoring the saved Music folder…";
+        await connectFileMap(await collectDirectoryHandle(rememberedDirectoryHandle), { activate: false });
+      } else if (!selectedLibrary) {
+        status.textContent = "Your previous Music folder is remembered. Select Connect Music Folder to restore access.";
+      }
+    } catch (error) {
+      console.warn("Could not restore the saved Music folder:", error);
+    }
+  })();
 }

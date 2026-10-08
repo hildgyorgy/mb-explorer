@@ -66,9 +66,9 @@ export function refreshPlaybackSetup(root = document) {
   const compatibilityState = compatibilitySummary(source, local, navidrome);
 
   if (sourceLabel) {
-    sourceLabel.textContent = source === "navidrome" && navidrome.connected
+    sourceLabel.textContent = source === "navidrome" && (navidrome.connected || navidrome.remembered)
       ? navidrome.name
-      : source === "local" && local.connected
+      : source === "local" && (local.connected || local.remembered)
         ? "Local music folder"
         : "Choose a music library";
   }
@@ -111,11 +111,11 @@ function bindPersistentSetup(root) {
 
   localTab?.addEventListener("click", () => {
     showSourcePanel("local");
-    if (getLocalLibrarySummary().connected) setActiveLibrarySource("local");
+    setActiveLibrarySource("local");
   });
   navidromeTab?.addEventListener("click", () => {
     showSourcePanel("navidrome");
-    if (getNavidromeSummary().connected) setActiveLibrarySource("navidrome");
+    setActiveLibrarySource("navidrome");
   });
 
   systemOutput?.addEventListener("click", () => {

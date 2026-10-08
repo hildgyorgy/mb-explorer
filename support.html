@@ -328,8 +328,9 @@
         <li>Confirm the browser's folder-selection dialog.</li>
       </ol>
       <p>
-        You do not need to reconnect immediately after creating an index: the Explorer already uses it for the
-        current page session. Reconnecting is required when you return later because folder permission is not retained.
+        You do not need to reconnect immediately after creating an index: the Explorer already uses it. In
+        browsers with persistent folder handles, the selected folder is remembered and restored automatically.
+        The browser may still ask you to approve access again after a restart.
       </p>
       <p>
         A small play triangle marks matching releases in search results. Open one, then hover over a track
@@ -341,8 +342,9 @@
         Play icons only for the files that are actually present in the connected library.
       </p>
       <p>
-        Folder permission lasts only for the current page session. You will need to connect the folder again
-        after closing or reloading the page.
+        If automatic access is not available, the Explorer remembers the previous folder handle and asks you to
+        restore permission with <strong>Connect Music Folder</strong>. Browsers without persistent folder-handle
+        support require the folder to be selected again.
       </p>
     </section>
 
@@ -370,8 +372,9 @@
         <li>Select <strong>Connect</strong> and wait while the Explorer reads the album catalogue.</li>
       </ol>
       <p>
-        The server profile and username are remembered in this browser. The password is kept only in memory
-        for the current page session, so it must be entered again after reopening or reloading the Explorer.
+        The server profile and a reusable salted OpenSubsonic login token are remembered on this device; the
+        original password is not stored. If Navidrome was the selected source, the Explorer reconnects
+        automatically after reopening or reloading the page.
       </p>
 
       <h3>Check MusicBrainz compatibility</h3>
@@ -487,9 +490,9 @@
         <li>MusicBrainz Explorer has no application backend or user accounts.</li>
         <li>Your music files and <code>library.json</code> are not uploaded by the app.</li>
         <li>Browser indexing and playback happen locally on your device.</li>
-        <li>The app does not retain folder access after the page session ends.</li>
+        <li>A supported browser may retain the selected local-folder handle; it controls whether access must be approved again.</li>
         <li>Navidrome requests go directly from the browser to the server you configure.</li>
-        <li>The Navidrome server profile and username may be remembered locally; the password is session-only.</li>
+        <li>The Navidrome profile and a reusable salted login token are stored locally; the original password is not stored.</li>
         <li>Music metadata and cover art are requested from MusicBrainz and the Cover Art Archive.</li>
       </ul>
       <p>
@@ -504,7 +507,7 @@
         <li>The indexers currently support FLAC and M4A (ALAC/AAC).</li>
         <li>One local copy is expected for each MusicBrainz release MBID.</li>
         <li>Files must already be tagged correctly with MusicBrainz Picard.</li>
-        <li>Local folder access must be granted again in each new browser session.</li>
+        <li>Persistent local-folder access depends on browser support and permission policy.</li>
         <li>Remote Navidrome connections require HTTPS.</li>
         <li>UPnP network-renderer output is still under development.</li>
       </ul>

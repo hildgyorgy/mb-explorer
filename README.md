@@ -94,10 +94,10 @@ names are never used as album identities in the report. The report is also
 saved as `library-report.json`, so it can be reopened after reconnecting the
 Music folder.
 
-The new index is active immediately in the current page session. After
-reloading the page or returning later, use **Source → Local → Connect Music
-Folder** and select the same folder so the Explorer can read `library.json`
-again.
+The new index is active immediately. Browsers with persistent directory-handle
+support remember the selected folder and restore it automatically. A browser
+may still ask you to approve access again; browsers without this support
+require the folder to be selected again.
 
 Some browsers use the word **Upload** in their native folder picker. Despite
 that wording, the Explorer does not upload your index or music files to a
@@ -139,9 +139,9 @@ how long it took.
 3. Choose the same Music folder that contains `library.json`.
 4. Confirm the browser's folder-selection dialog.
 
-The Explorer loads the index and temporarily receives access to the selected
-files. This permission is not retained after the page is closed, so the folder
-must be connected again in a new browser session.
+The Explorer loads the index and receives browser-controlled access to the
+selected files. When persistent directory handles are supported, the folder is
+remembered across sessions, although the browser may ask for permission again.
 
 ### 3. Search and play
 
@@ -190,7 +190,7 @@ part of the playback chain, bit-perfect output cannot be guaranteed.
 - The indexers currently support FLAC and M4A (ALAC/AAC).
 - Files must already be tagged correctly with Picard.
 - One local copy is expected for each MusicBrainz release MBID.
-- Local folder permission must be granted again after closing the page.
+- Persistent local-folder access depends on browser support and permission policy.
 - Browser support and folder-picker wording vary by platform.
 - Cloud-storage connections are not currently supported.
 

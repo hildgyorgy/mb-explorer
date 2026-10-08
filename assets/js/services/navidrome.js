@@ -1,4 +1,4 @@
-import { setActiveLibrarySource } from "../core/librarySource.js";
+import { getActiveLibrarySource, setActiveLibrarySource } from "../core/librarySource.js";
 import { matchNavidromeTrack, positiveInteger } from "./navidromeMatching.mjs";
 
 const API_VERSION = "1.16.1";
@@ -7,7 +7,8 @@ const PAGE_SIZE = 500;
 const SAVED_PROFILE_KEY = "musicards.navidrome.profile";
 
 let profile = null;
-let password = "";
+let authToken = "";
+let authSalt = "";
 let catalog = [];
 let albumInventory = [];
 let albumsByRelease = new Map();
@@ -27,6 +28,22 @@ function canonicalMbid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(text)
     ? text
     : "";
+}
+
+function randomSalt() {
+  return crypto.getRandomValues(new Uint8Array(8)).reduce(
+    (out, byte) => `${out}${byte.toString(16).padStart(2, "0")}`,
+    ""
+  );
+}
+
+function savedConnection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SAVED_PROFILE_KEY) || "null");
+    return saved && typeof saved === "object" ? saved : null;
+  } catch (error) {
+    return null;
+  }
 }
 
 function normalizeBaseUrl(value) {
@@ -77,11 +94,10 @@ function md5(value) {
 }
 
 function authParameters(format = "json") {
-  const salt = crypto.getRandomValues(new Uint8Array(8)).reduce((out, byte) => `${out}${byte.toString(16).padStart(2, "0")}`, "");
   return {
     u: profile.username,
-    t: md5(password + salt),
-    s: salt,
+    t: authToken,
+    s: authSalt,
     v: API_VERSION,
     c: CLIENT_NAME,
     f: format,
@@ -142,7 +158,7 @@ function mapAlbum(album, songs = null) {
 }
 
 export function streamUrl(songId) {
-  if (!profile || !password || !songId) return "";
+  if (!profile || !authToken || !authSalt || !songId) return "";
   const params = new URLSearchParams({ ...authParameters("json"), id: songId, format: "raw", maxBitRate: "0" });
   return `${endpoint("stream")}?${params.toString()}`;
 }
@@ -188,21 +204,27 @@ export function getNavidromeStatus() {
 }
 
 export function getNavidromeSummary() {
+  const remembered = savedConnection();
   return {
     connected: !!profile,
-    name: profile?.name || "Navidrome",
-    serverUrl: profile?.baseUrl?.toString() || "",
-    username: profile?.username || "",
+    remembered: !!remembered,
+    name: profile?.name || remembered?.name || "Navidrome",
+    serverUrl: profile?.baseUrl?.toString() || remembered?.baseUrl || "",
+    username: profile?.username || remembered?.username || "",
     identifiedAlbumCount: catalog.length,
     totalAlbumCount: albumInventory.length,
   };
 }
 
-export async function connectNavidrome({ name, serverUrl, username, userPassword }) {
-  const nextProfile = { name: String(name || "").trim(), baseUrl: normalizeBaseUrl(serverUrl), username: String(username || "").trim() };
-  if (!nextProfile.username || !userPassword) throw new Error("Navidrome username and password are required.");
+export async function connectNavidrome({ name, serverUrl, username, userPassword = "", savedToken = "", savedSalt = "" }) {
+  const nextProfile = { name: String(name || "").trim() || "Navidrome", baseUrl: normalizeBaseUrl(serverUrl), username: String(username || "").trim() };
+  if (!nextProfile.username) throw new Error("A Navidrome username is required.");
+  const nextSalt = String(savedSalt || "") || randomSalt();
+  const nextToken = String(savedToken || "") || (userPassword ? md5(String(userPassword) + nextSalt) : "");
+  if (!nextToken || !nextSalt) throw new Error("Enter the Navidrome password.");
   profile = nextProfile;
-  password = String(userPassword);
+  authToken = nextToken;
+  authSalt = nextSalt;
   navidromeError = "";
   catalog = [];
   albumInventory = [];
@@ -230,12 +252,21 @@ export async function connectNavidrome({ name, serverUrl, username, userPassword
       if (albums.length < PAGE_SIZE) break;
     }
     catalog = [...albumsByRelease.values()];
-    try { localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(nextProfile)); } catch (error) { /* storage may be unavailable */ }
+    try {
+      localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify({
+        name: nextProfile.name,
+        baseUrl: nextProfile.baseUrl.toString(),
+        username: nextProfile.username,
+        token: authToken,
+        salt: authSalt,
+      }));
+    } catch (error) { /* storage may be unavailable */ }
     setActiveLibrarySource("navidrome");
     notifyLibraryState();
     return { profile, albumCount: catalog.length, totalAlbumCount: albumInventory.length };
   } catch (error) {
-    disconnectNavidrome();
+    profile = null; authToken = ""; authSalt = ""; catalog = []; albumInventory = []; albumsByRelease = new Map(); tracksByRelease = new Map();
+    notifyLibraryState();
     throw error;
   }
 }
@@ -258,7 +289,7 @@ export async function prepareNavidromeRelease(releaseMbid) {
 }
 
 export function disconnectNavidrome() {
-  profile = null; password = ""; catalog = []; albumInventory = []; albumsByRelease = new Map(); tracksByRelease = new Map(); navidromeError = "";
+  profile = null; authToken = ""; authSalt = ""; catalog = []; albumInventory = []; albumsByRelease = new Map(); tracksByRelease = new Map(); navidromeError = "";
   setActiveLibrarySource("local");
   notifyLibraryState();
 }
@@ -275,14 +306,12 @@ export function bindNavidromePicker(root = document) {
   const untaggedList = root.getElementById("navidromeUntaggedAlbums");
   if (!open || !dialog || !form || !status || open.dataset.bound === "1") return;
   open.dataset.bound = "1";
-  try {
-    const saved = JSON.parse(localStorage.getItem(SAVED_PROFILE_KEY) || "null");
-    if (saved) {
-      form.elements.name.value = saved.name || "";
-      form.elements.serverUrl.value = saved.baseUrl || "";
-      form.elements.username.value = saved.username || "";
-    }
-  } catch (error) { /* ignore malformed or unavailable local storage */ }
+  let saved = savedConnection();
+  if (saved) {
+    form.elements.name.value = saved.name || "";
+    form.elements.serverUrl.value = saved.baseUrl || "";
+    form.elements.username.value = saved.username || "";
+  }
   status.textContent = getNavidromeStatus();
   if (inventoryButton) inventoryButton.hidden = !profile;
   if (disconnectButton) disconnectButton.hidden = !profile;
@@ -327,12 +356,22 @@ export function bindNavidromePicker(root = document) {
     submit.disabled = true; status.textContent = "Connecting to Navidrome…";
     try {
       const data = new FormData(form);
-      const result = await connectNavidrome({ name: data.get("name"), serverUrl: data.get("serverUrl"), username: data.get("username"), userPassword: data.get("password") });
+      const enteredPassword = String(data.get("password") || "");
+      const result = await connectNavidrome({
+        name: data.get("name"),
+        serverUrl: data.get("serverUrl"),
+        username: data.get("username"),
+        userPassword: enteredPassword,
+        savedToken: enteredPassword ? "" : saved?.token,
+        savedSalt: enteredPassword ? "" : saved?.salt,
+      });
       status.classList.remove("err");
       status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
       if (inventoryButton) inventoryButton.hidden = false;
       if (disconnectButton) disconnectButton.hidden = false;
-      dialog.close();
+      saved = savedConnection();
+      form.elements.password.value = "";
+      dialog.querySelector(".search-help-close")?.click();
     } catch (error) {
       navidromeError = error?.message || "Could not connect to Navidrome.";
       status.textContent = navidromeError;
@@ -345,6 +384,26 @@ export function bindNavidromePicker(root = document) {
     status.textContent = getNavidromeStatus();
     disconnectButton.hidden = true;
     if (inventoryButton) inventoryButton.hidden = true;
-    dialog.close();
+    dialog.querySelector(".search-help-close")?.click();
   });
+
+  if (getActiveLibrarySource() === "navidrome" && saved?.token && saved?.salt) {
+    status.textContent = "Restoring the saved Navidrome connection…";
+    connectNavidrome({
+      name: saved.name,
+      serverUrl: saved.baseUrl,
+      username: saved.username,
+      savedToken: saved.token,
+      savedSalt: saved.salt,
+    }).then((result) => {
+      status.classList.remove("err");
+      status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
+      if (inventoryButton) inventoryButton.hidden = false;
+      if (disconnectButton) disconnectButton.hidden = false;
+    }).catch((error) => {
+      navidromeError = error?.message || "Could not restore Navidrome.";
+      status.textContent = navidromeError;
+      status.classList.add("err");
+    });
+  }
 }

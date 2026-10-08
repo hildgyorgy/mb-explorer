@@ -528,7 +528,7 @@ export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
   };
 }
 
-async function collectDirectoryHandle(directoryHandle) {
+export async function collectDirectoryHandle(directoryHandle) {
   const files = new Map();
   async function walk(handle, prefix = "") {
     for await (const [name, entry] of handle.entries()) {

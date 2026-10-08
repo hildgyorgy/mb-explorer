@@ -124,7 +124,8 @@
     <p class="sheet-note muted">Network renderers are available for Navidrome playback through the local MusiCards UPnP bridge.</p>
   </dialog>
 
-  <dialog class="search-help-dialog" id="navidromeDialog" aria-labelledby="navidromeTitle">
+  <dialog class="search-help-dialog" id="navidromeDialog" aria-labelledby="navidromeTitle"
+    data-return-dialog="sourceDialog">
     <div class="search-help-head">
       <h2 id="navidromeTitle">Connect Navidrome</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
@@ -133,9 +134,9 @@
       <label>Name <input name="name" type="text" placeholder="Home Navidrome"></label>
       <label>Server URL <input name="serverUrl" type="url" placeholder="https://music.example.com" required></label>
       <label>Username <input name="username" type="text" autocomplete="username" required></label>
-      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" placeholder="Use saved connection if left blank"></label>
       <p class="local-library-status muted" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
-      <button class="onboarding-action" type="submit"><span class="onboarding-copy"><strong>Connect</strong><span>Server and username are remembered; the password is kept only for this page session.</span></span><span class="onboarding-arrow" aria-hidden="true">→</span></button>
+      <button class="onboarding-action" type="submit"><span class="onboarding-copy"><strong>Connect</strong><span>This device remembers a reusable login token; your original password is not stored.</span></span><span class="onboarding-arrow" aria-hidden="true">→</span></button>
       <button class="pill navidrome-disconnect" id="disconnectNavidrome" type="button" hidden>Disconnect Navidrome</button>
     </form>
   </dialog>
