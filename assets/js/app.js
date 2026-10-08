@@ -14,6 +14,7 @@ import { createMobileHeaderController } from "./ui/mobileHeader.js";
 import { bindLocalLibraryPicker } from "./services/localLibrary.js";
 import { leaveTrackPlaybackView } from "./features/player.js";
 import { bindNavidromePicker } from "./services/navidrome.js";
+import { bindPlaybackSetup } from "./ui/playbackSetup.js";
 
 // ------------------------------
 // Loading / navigation
@@ -23,6 +24,44 @@ async function goFallback() {
   // Reserved fallback hook for empty searches.
 }
 
+function closeDialogAnimated(dialog, onClosed) {
+  if (!dialog?.open || dialog.classList.contains("is-closing")) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    dialog.close();
+    onClosed?.();
+    return;
+  }
+
+  dialog.classList.add("is-closing");
+  let fallback;
+  const finish = () => {
+    clearTimeout(fallback);
+    dialog.removeEventListener("animationend", onAnimationEnd);
+    dialog.classList.remove("is-closing");
+    if (dialog.open) dialog.close();
+    onClosed?.();
+  };
+  const onAnimationEnd = (event) => {
+    if (event.target === dialog && event.animationName === "dialog-pop-out") finish();
+  };
+  dialog.addEventListener("animationend", onAnimationEnd);
+  fallback = window.setTimeout(finish, 260);
+}
+
+function bindAnimatedDialogCloseButtons(root = document) {
+  root.querySelectorAll(".search-help-close").forEach((button) => {
+    if (button.dataset.closeMotionBound === "1") return;
+    button.dataset.closeMotionBound = "1";
+    button.addEventListener("click", () => {
+      const dialog = button.closest("dialog");
+      const returnDialog = document.getElementById(dialog?.dataset.returnDialog || "");
+      closeDialogAnimated(dialog, () => {
+        if (returnDialog && !returnDialog.open) returnDialog.showModal();
+      });
+    });
+  });
+}
+
 // ------------------------------
 // App init
 // ------------------------------
@@ -30,29 +69,24 @@ export const App = Object.freeze({
   init() {
     applyTheme(getPreferredTheme());
     bindThemeToggleOnce(document);
+    bindAnimatedDialogCloseButtons(document);
 
     const emptyStateHtml = document.getElementById("emptyState")?.outerHTML || "";
 
     const bindHomeActions = () => {
       bindLocalLibraryPicker(document);
       bindNavidromePicker(document);
+      bindPlaybackSetup(document);
 
       const helpDialog = document.getElementById("searchHelpDialog");
       const helpOpen = document.getElementById("searchHelpOpen");
-      const findReleases = document.getElementById("findReleases");
 
       helpOpen?.addEventListener("click", () => helpDialog?.showModal());
-      findReleases?.addEventListener("click", () => {
-        const omni = document.getElementById("omni");
-        omni?.focus({ preventScroll: true });
-      });
     };
 
     bindHomeActions();
 
     const helpDialog = document.getElementById("searchHelpDialog");
-    const helpClose = document.getElementById("searchHelpClose");
-    helpClose?.addEventListener("click", () => helpDialog?.close());
     helpDialog?.addEventListener("click", (event) => {
       if (event.target === helpDialog) helpDialog.close();
     });

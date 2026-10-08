@@ -1,5 +1,4 @@
 import { setActiveLibrarySource } from "../core/librarySource.js";
-import { loadBridgeRenderer } from "./upnpRenderer.js";
 import { matchNavidromeTrack, positiveInteger } from "./navidromeMatching.mjs";
 
 const API_VERSION = "1.16.1";
@@ -14,6 +13,10 @@ let albumInventory = [];
 let albumsByRelease = new Map();
 let tracksByRelease = new Map();
 let navidromeError = "";
+
+function notifyLibraryState() {
+  window.dispatchEvent(new CustomEvent("music-library-state-change", { detail: { source: "navidrome" } }));
+}
 
 function key(value) {
   return String(value || "").trim().toLowerCase();
@@ -184,6 +187,17 @@ export function getNavidromeStatus() {
   return `Connected to ${profile.name}. ${catalog.length.toLocaleString()} identified albums.`;
 }
 
+export function getNavidromeSummary() {
+  return {
+    connected: !!profile,
+    name: profile?.name || "Navidrome",
+    serverUrl: profile?.baseUrl?.toString() || "",
+    username: profile?.username || "",
+    identifiedAlbumCount: catalog.length,
+    totalAlbumCount: albumInventory.length,
+  };
+}
+
 export async function connectNavidrome({ name, serverUrl, username, userPassword }) {
   const nextProfile = { name: String(name || "").trim(), baseUrl: normalizeBaseUrl(serverUrl), username: String(username || "").trim() };
   if (!nextProfile.username || !userPassword) throw new Error("Navidrome username and password are required.");
@@ -218,6 +232,7 @@ export async function connectNavidrome({ name, serverUrl, username, userPassword
     catalog = [...albumsByRelease.values()];
     try { localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify(nextProfile)); } catch (error) { /* storage may be unavailable */ }
     setActiveLibrarySource("navidrome");
+    notifyLibraryState();
     return { profile, albumCount: catalog.length, totalAlbumCount: albumInventory.length };
   } catch (error) {
     disconnectNavidrome();
@@ -245,6 +260,7 @@ export async function prepareNavidromeRelease(releaseMbid) {
 export function disconnectNavidrome() {
   profile = null; password = ""; catalog = []; albumInventory = []; albumsByRelease = new Map(); tracksByRelease = new Map(); navidromeError = "";
   setActiveLibrarySource("local");
+  notifyLibraryState();
 }
 
 export function bindNavidromePicker(root = document) {
@@ -252,9 +268,7 @@ export function bindNavidromePicker(root = document) {
   const dialog = root.getElementById("navidromeDialog");
   const form = root.getElementById("navidromeForm");
   const status = root.getElementById("navidromeStatus");
-  const probeButton = root.getElementById("probeAvm");
-  const rendererUrl = root.getElementById("rendererDescriptionUrl");
-  const rendererStatus = root.getElementById("rendererStatus");
+  const disconnectButton = root.getElementById("disconnectNavidrome");
   const inventoryButton = root.getElementById("showNavidromeInventory");
   const inventoryDialog = root.getElementById("navidromeInventoryDialog");
   const identifiedList = root.getElementById("navidromeIdentifiedAlbums");
@@ -271,7 +285,11 @@ export function bindNavidromePicker(root = document) {
   } catch (error) { /* ignore malformed or unavailable local storage */ }
   status.textContent = getNavidromeStatus();
   if (inventoryButton) inventoryButton.hidden = !profile;
-  open.addEventListener("click", () => dialog.showModal());
+  if (disconnectButton) disconnectButton.hidden = !profile;
+  open.addEventListener("click", () => {
+    open.closest("dialog")?.close();
+    dialog.showModal();
+  });
   inventoryButton?.addEventListener("click", () => {
     if (!profile || !inventoryDialog || !identifiedList || !untaggedList) return;
     const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
@@ -300,7 +318,7 @@ export function bindNavidromePicker(root = document) {
     };
     addRows(identifiedList, identified, true);
     addRows(untaggedList, untagged, false);
-    dialog.close();
+    inventoryButton.closest("dialog")?.close();
     inventoryDialog.showModal();
   });
   form.addEventListener("submit", async (event) => {
@@ -313,6 +331,7 @@ export function bindNavidromePicker(root = document) {
       status.classList.remove("err");
       status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
       if (inventoryButton) inventoryButton.hidden = false;
+      if (disconnectButton) disconnectButton.hidden = false;
       dialog.close();
     } catch (error) {
       navidromeError = error?.message || "Could not connect to Navidrome.";
@@ -320,15 +339,12 @@ export function bindNavidromePicker(root = document) {
       status.classList.add("err");
     } finally { submit.disabled = false; }
   });
-  probeButton?.addEventListener("click", async () => {
-    rendererStatus.textContent = "Connecting to local UPnP bridge…";
-    rendererStatus.classList.remove("err");
-    try {
-      const result = await loadBridgeRenderer();
-      rendererStatus.textContent = `${result.friendlyName} · connected through local bridge.`;
-    } catch (error) {
-      rendererStatus.textContent = error?.message || "The browser could not reach the renderer (CORS, mixed content, or local-network access).";
-      rendererStatus.classList.add("err");
-    }
+  disconnectButton?.addEventListener("click", () => {
+    disconnectNavidrome();
+    status.classList.remove("err");
+    status.textContent = getNavidromeStatus();
+    disconnectButton.hidden = true;
+    if (inventoryButton) inventoryButton.hidden = true;
+    dialog.close();
   });
 }

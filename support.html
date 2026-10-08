@@ -254,8 +254,9 @@
         visual interface.
       </p>
       <p>
-        It can also map MusicBrainz-tagged files in your own music folder to the same releases and play them
-        locally. The player is optional: the Explorer remains fully usable without connecting a library.
+        It can also match MusicBrainz-tagged music from a local folder or a Navidrome server to the same
+        releases and play it in the browser. Playback is optional: the Explorer remains fully usable without
+        connecting a library.
       </p>
     </section>
 
@@ -289,15 +290,17 @@
 
       <h3>1. Create the library index</h3>
       <ol>
-        <li>Select <strong>Create Library Index</strong> on the Explorer start page.</li>
+        <li>Select the pulsing logo, open <strong>Source</strong>, then choose <strong>Local</strong>.</li>
+        <li>Select <strong>Create Library Index</strong>.</li>
         <li>Choose the root of your Music folder.</li>
         <li>Allow the browser to scan the supported audio files.</li>
-        <li>Place the downloaded <code>library.json</code> in the root of the selected Music folder.</li>
+        <li>Keep the generated <code>library.json</code> and <code>library-report.json</code> in the root of that folder. Depending on the browser, they are saved there directly or downloaded for you to move there.</li>
       </ol>
       <p>
         The browser indexer reads only the required MusicBrainz tags, technical audio properties and relative
         file locations. Embedded cover images and audio payloads are skipped. If the folder already contains a
         version 2 <code>library.json</code>, unchanged albums are reused and only changed folders are indexed again.
+        The new index is ready to use immediately in the current page session.
       </p>
 
       <div class="note">
@@ -317,12 +320,17 @@
       <p>Windows:</p>
       <p><code>py generate_library.py "D:\Music"</code></p>
 
-      <h3>2. Connect the Music folder</h3>
+      <h3>2. Connect or reconnect the Music folder</h3>
       <ol>
+        <li>After reopening or reloading the Explorer, select the pulsing logo, open <strong>Source</strong>, then choose <strong>Local</strong>.</li>
         <li>Select <strong>Connect Music Folder</strong>.</li>
         <li>Choose the same folder that now contains <code>library.json</code>.</li>
         <li>Confirm the browser's folder-selection dialog.</li>
       </ol>
+      <p>
+        You do not need to reconnect immediately after creating an index: the Explorer already uses it for the
+        current page session. Reconnecting is required when you return later because folder permission is not retained.
+      </p>
       <p>
         A small play triangle marks matching releases in search results. Open one, then hover over a track
         number and select its play icon. The floating player continues playing while you browse another release.
@@ -335,6 +343,59 @@
       <p>
         Folder permission lasts only for the current page session. You will need to connect the folder again
         after closing or reloading the page.
+      </p>
+    </section>
+
+    <section aria-labelledby="navidrome-playback">
+      <h2 id="navidrome-playback">Playing from Navidrome</h2>
+      <p>
+        Navidrome is a complete alternative to the local-folder source. The Explorer connects directly to its
+        OpenSubsonic API, reads the album catalogue and streams matching tracks without creating
+        <code>library.json</code>.
+      </p>
+
+      <h3>Before you begin</h3>
+      <ul>
+        <li>Use a Navidrome server with OpenSubsonic support that is reachable from the browser.</li>
+        <li>Remote servers must use HTTPS; HTTP is accepted only for local-network addresses.</li>
+        <li>Tag albums with MusicBrainz release MBIDs and tracks with recording MBIDs.</li>
+        <li>Keep disc and track numbers accurate, especially for multi-disc and layered releases.</li>
+      </ul>
+
+      <h3>Connect the server</h3>
+      <ol>
+        <li>Select the pulsing logo, open <strong>Source</strong>, then choose <strong>Navidrome</strong>.</li>
+        <li>Select <strong>Connect or configure</strong>.</li>
+        <li>Enter a display name, the server URL, your username and password.</li>
+        <li>Select <strong>Connect</strong> and wait while the Explorer reads the album catalogue.</li>
+      </ol>
+      <p>
+        The server profile and username are remembered in this browser. The password is kept only in memory
+        for the current page session, so it must be entered again after reopening or reloading the Explorer.
+      </p>
+
+      <h3>Check MusicBrainz compatibility</h3>
+      <p>
+        After connecting, the setup popup shows identified albums versus the total catalogue. Select that status,
+        or <strong>Show MusicBrainz compatibility report</strong> under the Navidrome source, to see two lists:
+        albums with a valid release MBID and albums without one. Untagged albums are still named from their
+        Navidrome artist and album metadata; folder names are not used.
+      </p>
+
+      <h3>Search and play</h3>
+      <p>
+        Navidrome becomes the active source after a successful connection. Search normally: matching server
+        albums appear with a <strong>NAVIDROME</strong> label, and playable releases and tracks receive play icons.
+        The floating player continues playing while you browse.
+      </p>
+      <p>
+        A release is matched by its release MBID. Tracks are then matched by recording MBID together with disc
+        and track position. If a match is ambiguous, the Explorer leaves it unplayable instead of guessing; this
+        prevents one file from appearing on multiple media or hybrid SACD layers.
+      </p>
+      <p>
+        Use <strong>Disconnect Navidrome</strong> to end the session. You can return to a connected local folder at
+        any time from <strong>Source → Local</strong>.
       </p>
     </section>
 
@@ -367,6 +428,23 @@
       </details>
 
       <details>
+        <summary>Navidrome does not connect</summary>
+        <p>
+          Check the server URL and credentials. A remote URL must use HTTPS, and the server must identify itself
+          as Navidrome with OpenSubsonic support. Local-network HTTP addresses are allowed.
+        </p>
+      </details>
+
+      <details>
+        <summary>Navidrome connects, but some albums or tracks are not playable</summary>
+        <p>
+          Open the MusicBrainz compatibility report first. Albums need a release MBID; tracks need a recording
+          MBID and accurate disc and track numbers. Retag the affected files with Picard, rescan the Navidrome
+          library, then reconnect the Explorer.
+        </p>
+      </details>
+
+      <details>
         <summary>The browser cannot play a FLAC or M4A file</summary>
         <p>
           Actual codec support depends on the browser and operating system. M4A is a container and may contain
@@ -388,14 +466,19 @@
     <section aria-labelledby="audio">
       <h2 id="audio">Audio playback</h2>
       <p>
-        The Explorer plays the original selected file through the browser's native audio pipeline and does not
-        deliberately transcode it. Source information such as codec, bit depth, sample rate and channel layout
-        is shown when available.
+        For a local folder, the Explorer plays the selected file through the browser's native audio pipeline.
+        For Navidrome, it requests the raw stream without a bitrate limit. The Explorer does not deliberately
+        request transcoding. Source information such as codec, bit depth, sample rate and channel layout is shown
+        when available.
       </p>
       <p>
         Because the browser, operating-system mixer and chosen audio device remain part of the playback chain,
         bit-perfect output cannot be guaranteed.
       </p>
+      <div class="note">
+        UPnP network-renderer output is under development and is planned for an upcoming release. System audio
+        is the supported playback output in version 1.5.0.
+      </div>
     </section>
 
     <section aria-labelledby="privacy">
@@ -405,6 +488,8 @@
         <li>Your music files and <code>library.json</code> are not uploaded by the app.</li>
         <li>Browser indexing and playback happen locally on your device.</li>
         <li>The app does not retain folder access after the page session ends.</li>
+        <li>Navidrome requests go directly from the browser to the server you configure.</li>
+        <li>The Navidrome server profile and username may be remembered locally; the password is session-only.</li>
         <li>Music metadata and cover art are requested from MusicBrainz and the Cover Art Archive.</li>
       </ul>
       <p>
@@ -420,6 +505,8 @@
         <li>One local copy is expected for each MusicBrainz release MBID.</li>
         <li>Files must already be tagged correctly with MusicBrainz Picard.</li>
         <li>Local folder access must be granted again in each new browser session.</li>
+        <li>Remote Navidrome connections require HTTPS.</li>
+        <li>UPnP network-renderer output is still under development.</li>
       </ul>
     </section>
 
@@ -448,7 +535,7 @@
     </section>
 
     <footer class="footer">
-      MusicBrainz Explorer v1.0.0<br>
+      MusicBrainz Explorer v1.5.0<br>
       © 2026 György Hild
     </footer>
   </main>

@@ -49,63 +49,85 @@
     <div class="container">
       <div id="out">
         <section id="emptyState" class="empty-state seo-copy">
-          <div class="empty-inner">
+          <div class="empty-inner setup-home">
             <button class="empty-logo-button" id="searchHelpOpen" type="button"
-              aria-label="Open search help" aria-haspopup="dialog">
+              aria-label="Open setup and help" aria-haspopup="dialog">
+              <svg class="setup-logo-wave" viewBox="0 0 100 100" aria-hidden="true">
+                <path d="M50 5 C53 5 55 6 58 8 L87 25 C91 27 93 30 93 35 L93 65 C93 70 91 73 87 75 L58 92 C55 94 53 95 50 95 C47 95 45 94 42 92 L13 75 C9 73 7 70 7 65 L7 35 C7 30 9 27 13 25 L42 8 C45 6 47 5 50 5 Z" />
+              </svg>
+              <svg class="setup-logo-wave setup-logo-wave-delayed" viewBox="0 0 100 100" aria-hidden="true">
+                <path d="M50 5 C53 5 55 6 58 8 L87 25 C91 27 93 30 93 35 L93 65 C93 70 91 73 87 75 L58 92 C55 94 53 95 50 95 C47 95 45 94 42 92 L13 75 C9 73 7 70 7 65 L7 35 C7 30 9 27 13 25 L42 8 C45 6 47 5 50 5 Z" />
+              </svg>
               <img class="empty-logo" src="./assets/icons/MB_go.png" alt="">
             </button>
-
-            <div class="empty-onboarding">
-              <button class="onboarding-action" id="findReleases" type="button">
-                <span class="onboarding-copy">
-                  <strong>Find releases</strong>
-                  <span>Search by artist, title or MusicBrainz ID.</span>
-                </span>
-                <span class="onboarding-arrow" aria-hidden="true">→</span>
-              </button>
-
-              <button class="onboarding-action" id="openMusicFolder" type="button">
-                <span class="onboarding-copy">
-                  <strong>Connect Music Folder</strong>
-                  <span>to play releases in your local library.</span>
-                </span>
-                <span class="onboarding-arrow" aria-hidden="true">→</span>
-              </button>
-
-              <button class="onboarding-action" id="createLibraryIndex" type="button">
-                <span class="onboarding-copy">
-                  <strong>Create Library Index</strong>
-                  <span>to map your tagged music files for local playback.</span>
-                </span>
-                <span class="onboarding-arrow" aria-hidden="true">→</span>
-              </button>
-
-              <button class="onboarding-action" id="openNavidrome" type="button">
-                <span class="onboarding-copy">
-                  <strong>Connect Navidrome</strong>
-                  <span>to browse and play your server library.</span>
-                </span>
-                <span class="onboarding-arrow" aria-hidden="true">→</span>
-              </button>
-            </div>
-
-            <div class="local-library-start">
-              <input id="musicFolderInput" type="file" webkitdirectory multiple hidden>
-              <input id="indexMusicFolderInput" type="file" webkitdirectory multiple hidden>
-              <p class="local-library-status muted" id="musicFolderStatus" role="status" aria-live="polite">
-                Your Music folder is not connected
-              </p>
-            </div>
+            <p class="empty-setup-hint">Setup</p>
           </div>
         </section>
       </div>
     </div>
   </main>
 
+  <dialog class="search-help-dialog setup-sheet" id="sourceDialog" aria-labelledby="sourceTitle"
+    data-return-dialog="searchHelpDialog">
+    <div class="search-help-head">
+      <h2 id="sourceTitle">Music source</h2>
+      <button class="search-help-close" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="source-switch" role="tablist" aria-label="Music library source">
+      <button id="sourceLocalTab" type="button" role="tab" aria-controls="sourceLocalPanel">Local</button>
+      <button id="sourceNavidromeTab" type="button" role="tab" aria-controls="sourceNavidromePanel">Navidrome</button>
+    </div>
+    <section class="source-panel" id="sourceLocalPanel" role="tabpanel">
+      <p class="sheet-eyebrow">Local music folder</p>
+      <p class="local-library-status muted" id="musicFolderStatus" role="status" aria-live="polite">Your Music folder is not connected</p>
+      <div class="sheet-actions">
+        <button class="onboarding-action" id="openMusicFolder" type="button">
+          <span class="onboarding-copy"><strong>Connect Music Folder</strong><span>Select a folder that already contains library.json.</span></span>
+          <span class="onboarding-arrow" aria-hidden="true">→</span>
+        </button>
+        <button class="onboarding-action" id="createLibraryIndex" type="button">
+          <span class="onboarding-copy"><strong>Create Library Index</strong><span>Read audio tags and create the playback index and MB report.</span></span>
+          <span class="onboarding-arrow" aria-hidden="true">→</span>
+        </button>
+      </div>
+      <button class="pill sheet-secondary-action" id="showLocalInventory" type="button" hidden>Show MusicBrainz compatibility report</button>
+      <input id="musicFolderInput" type="file" webkitdirectory multiple hidden>
+      <input id="indexMusicFolderInput" type="file" webkitdirectory multiple hidden>
+    </section>
+    <section class="source-panel" id="sourceNavidromePanel" role="tabpanel" hidden>
+      <p class="sheet-eyebrow">Navidrome music library</p>
+      <p class="local-library-status muted" id="navidromeSourceStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
+      <div class="sheet-actions">
+        <button class="onboarding-action" id="openNavidrome" type="button">
+          <span class="onboarding-copy"><strong>Connect or configure</strong><span>Use your Navidrome server as the searchable playback library.</span></span>
+          <span class="onboarding-arrow" aria-hidden="true">→</span>
+        </button>
+      </div>
+      <button class="pill sheet-secondary-action" id="showNavidromeInventory" type="button" hidden>Show MusicBrainz compatibility report</button>
+    </section>
+  </dialog>
+
+  <dialog class="search-help-dialog setup-sheet" id="outputDialog" aria-labelledby="outputTitle"
+    data-return-dialog="searchHelpDialog">
+    <div class="search-help-head">
+      <h2 id="outputTitle">Playback output</h2>
+      <button class="search-help-close" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="output-options" id="outputOptions">
+      <button class="output-option is-selected" id="systemOutput" type="button">
+        <span><strong>System audio</strong><small>This browser and the selected system output.</small></span>
+        <span class="output-check" aria-hidden="true">✓</span>
+      </button>
+    </div>
+    <button class="pill discover-renderers" id="discoverRenderers" type="button">Discover UPnP renderers</button>
+    <p class="local-library-status muted" id="rendererStatus" role="status" aria-live="polite">The local MusiCards bridge is not connected.</p>
+    <p class="sheet-note muted">Network renderers are available for Navidrome playback through the local MusiCards UPnP bridge.</p>
+  </dialog>
+
   <dialog class="search-help-dialog" id="navidromeDialog" aria-labelledby="navidromeTitle">
     <div class="search-help-head">
       <h2 id="navidromeTitle">Connect Navidrome</h2>
-      <button class="search-help-close" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
+      <button class="search-help-close" type="button" aria-label="Close">×</button>
     </div>
     <form id="navidromeForm" class="navidrome-form">
       <label>Name <input name="name" type="text" placeholder="Home Navidrome"></label>
@@ -114,19 +136,30 @@
       <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
       <p class="local-library-status muted" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
       <button class="onboarding-action" type="submit"><span class="onboarding-copy"><strong>Connect</strong><span>Server and username are remembered; the password is kept only for this page session.</span></span><span class="onboarding-arrow" aria-hidden="true">→</span></button>
-      <button class="pill" id="showNavidromeInventory" type="button" hidden>Show album tagging list</button>
-      <div class="renderer-probe">
-        <label>UPnP renderer description URL <input id="rendererDescriptionUrl" type="url" placeholder="The bridge discovers automatically"><small class="muted">The local MusiCards UPnP bridge performs discovery and control.</small></label>
-        <button class="pill" id="probeAvm" type="button">Connect UPnP renderer through bridge</button>
-        <p class="local-library-status muted" id="rendererStatus" role="status" aria-live="polite">Local bridge not connected.</p>
-      </div>
+      <button class="pill navidrome-disconnect" id="disconnectNavidrome" type="button" hidden>Disconnect Navidrome</button>
     </form>
+  </dialog>
+
+  <dialog class="search-help-dialog navidrome-inventory-dialog" id="localInventoryDialog" aria-labelledby="localInventoryTitle">
+    <div class="search-help-head">
+      <h2 id="localInventoryTitle">Local music tagging report</h2>
+      <button class="search-help-close" type="button" aria-label="Close">×</button>
+    </div>
+    <p class="muted">Album names come from embedded audio metadata, never from folder names. The folder structure is used only to group files into releases.</p>
+    <h3>Ready for playback (<span id="localReadyCount">0</span>)</h3>
+    <ol class="navidrome-inventory-list" id="localReadyAlbums"></ol>
+    <h3>Partially tagged (<span id="localPartialCount">0</span>)</h3>
+    <ol class="navidrome-inventory-list" id="localPartialAlbums"></ol>
+    <h3>Tag with MusicBrainz Picard (<span id="localUntaggedCount">0</span>)</h3>
+    <ol class="navidrome-inventory-list" id="localUntaggedAlbums"></ol>
+    <h3>Metadata incomplete (<span id="localIncompleteCount">0</span>)</h3>
+    <ol class="navidrome-inventory-list" id="localIncompleteAlbums"></ol>
   </dialog>
 
   <dialog class="search-help-dialog navidrome-inventory-dialog" id="navidromeInventoryDialog" aria-labelledby="navidromeInventoryTitle">
     <div class="search-help-head">
       <h2 id="navidromeInventoryTitle">Navidrome albums</h2>
-      <button class="search-help-close" type="button" aria-label="Close" onclick="this.closest('dialog').close()">×</button>
+      <button class="search-help-close" type="button" aria-label="Close">×</button>
     </div>
     <p class="muted">Album MBIDs identify MusicBrainz releases. Playback also requires matching recording IDs on the tracks.</p>
     <h3>Identified albums (<span id="navidromeIdentifiedCount">0</span>)</h3>
@@ -137,8 +170,8 @@
 
   <dialog class="search-help-dialog" id="searchHelpDialog" aria-labelledby="searchHelpTitle">
     <div class="search-help-head">
-      <h2 id="searchHelpTitle">Explore releases. Play your own library.</h2>
-      <button class="search-help-close" id="searchHelpClose" type="button" aria-label="Close search help">×</button>
+      <h2 id="searchHelpTitle">Explore releases</h2>
+      <button class="search-help-close" id="searchHelpClose" type="button" aria-label="Close search help">X</button>
     </div>
     <div class="empty-help">
       <p>
@@ -158,8 +191,26 @@
         <code>353021d1-3d84-4f17-9fe4-66788d785a9d</code>
       </p>
     </div>
+    <div class="help-playback-setup">
+      <h3>Play MusicBrainz-tagged music from your library</h3>
+
+      <button class="setup-control" id="openSourceSheet" type="button" aria-haspopup="dialog">
+        <span class="setup-control-name">Source</span>
+        <span class="setup-control-value" id="homeSourceLabel">Choose a music library</span>
+      </button>
+
+      <button class="setup-control" id="openOutputSheet" type="button" aria-haspopup="dialog">
+        <span class="setup-control-name">Output</span>
+        <span class="setup-control-value" id="homeOutputLabel">System audio</span>
+      </button>
+
+      <button class="setup-compatibility" id="openCompatibilityReport" type="button">
+        <span id="homeCompatibilityStatus">No library connected</span>
+        <small id="homeCompatibilityLabel">MusicBrainz compatibility</small>
+      </button>
+    </div>
     <div class="search-help-about muted">
-      <div>MusicBrainz Explorer v1.0.0</div>
+      <div>MusicBrainz Explorer v1.5.0</div>
       <div>Data: MusicBrainz contributors • CC BY-NC-SA 3.0</div>
       <div class="search-help-support-row">
         <a class="search-help-support" href="./support.html">Support</a>

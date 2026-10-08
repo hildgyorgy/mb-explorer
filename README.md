@@ -2,7 +2,7 @@
 
 # MusicBrainz Explorer
 
-_version 1.0.0_
+_version 1.5.0_
 
 A small, framework-free web app for exploring MusicBrainz releases and playing
 the matching files from your own music library.
@@ -27,6 +27,9 @@ calm navigation and an optional local playback layer.
 - Classical works and movements presented as structured track groups
 - Light and dark themes with responsive desktop and mobile layouts
 - Local-library results integrated into the same MusicBrainz search
+- Local-folder and Navidrome/OpenSubsonic library sources
+- System-audio playback; UPnP network-renderer output is under development
+- MusicBrainz compatibility reports for connected libraries
 - Minimal playback controls that stay available while browsing other releases
 - Source information such as codec, bit depth, sample rate and channel count
 
@@ -72,10 +75,10 @@ There are two supported methods.
 #### Browser indexer
 
 1. Open the Explorer.
-2. Select **Create Library Index**.
-3. Choose the root of your Music folder.
-4. Approve saving `library.json`.
-5. Keep the generated file in the selected Music folder.
+2. Select the pulsing logo, open **Source**, then choose **Local**.
+3. Select **Create Library Index** and choose the root of your Music folder.
+4. Approve saving the generated index and report.
+5. Keep `library.json` and `library-report.json` in the root of the selected Music folder.
 
 Indexing happens entirely in the browser. Embedded cover artwork is skipped;
 only the required tags, technical audio properties and relative file locations
@@ -83,6 +86,18 @@ are read. The generated file uses index format version 2 and stores both the
 MusicBrainz recording and release-track IDs. When an existing version 2
 `library.json` is present, unchanged album folders are reused and only changed
 folders are read again.
+
+At the end of indexing, the Explorer shows a local tagging report grouped into
+fully tagged, partially tagged, missing-release-MBID and incomplete-metadata
+albums. Display names come from embedded Album Artist and Album tags; folder
+names are never used as album identities in the report. The report is also
+saved as `library-report.json`, so it can be reopened after reconnecting the
+Music folder.
+
+The new index is active immediately in the current page session. After
+reloading the page or returning later, use **Source → Local → Connect Music
+Folder** and select the same folder so the Explorer can read `library.json`
+again.
 
 Some browsers use the word **Upload** in their native folder picker. Despite
 that wording, the Explorer does not upload your index or music files to a
@@ -113,14 +128,16 @@ path when prompted:
 python3 generate_library.py
 ```
 
-By default, the script writes `library.json` into the selected Music folder
-and reports how many albums and files were indexed and how long it took.
+By default, the script writes `library.json` and `library-report.json` into the
+selected Music folder and reports how many albums and files were indexed and
+how long it took.
 
-### 2. Connect the Music folder
+### 2. Connect or reconnect the Music folder
 
-1. Select **Connect Music Folder**.
-2. Choose the same Music folder that contains `library.json`.
-3. Confirm the browser's folder-selection dialog.
+1. Select the pulsing logo, open **Source**, then choose **Local**.
+2. Select **Connect Music Folder**.
+3. Choose the same Music folder that contains `library.json`.
+4. Confirm the browser's folder-selection dialog.
 
 The Explorer loads the index and temporarily receives access to the selected
 files. This permission is not retained after the page is closed, so the folder
@@ -175,8 +192,7 @@ part of the playback chain, bit-perfect output cannot be guaranteed.
 - One local copy is expected for each MusicBrainz release MBID.
 - Local folder permission must be granted again after closing the page.
 - Browser support and folder-picker wording vary by platform.
-- Cloud storage and Navidrome/OpenSubsonic connections are ideas for future
-  exploration, not current features.
+- Cloud-storage connections are not currently supported.
 
 ## Architecture
 

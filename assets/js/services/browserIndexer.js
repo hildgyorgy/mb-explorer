@@ -1,3 +1,5 @@
+import { buildLocalAlbumReport, createLocalLibraryReport, reportEntryFromIndexedAlbum } from "./localLibraryReport.mjs";
+
 const SUPPORTED_EXTENSIONS = [".flac", ".m4a"];
 const INDEX_VERSION = 2;
 
@@ -413,6 +415,7 @@ export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
   const existing = await loadExistingLibrary(filesByPath);
   const warnings = existing.warning ? [existing.warning] : [];
   const libraryByFolder = new Map();
+  const reportByFolder = new Map();
   const entriesToIndex = [];
   let completed = 0;
   let reusedAlbumCount = 0;
@@ -421,6 +424,7 @@ export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
     const existingAlbum = existing.albumsByFolder.get(folderPath);
     if (existingAlbum && albumIsUnchanged(existingAlbum, folderEntries)) {
       libraryByFolder.set(folderPath, existingAlbum);
+      reportByFolder.set(folderPath, reportEntryFromIndexedAlbum(existingAlbum));
       reusedAlbumCount += 1;
       for (const { relativePath } of folderEntries) {
         completed += 1;
@@ -458,6 +462,7 @@ export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
   }
 
   for (const [folderPath, folderEntries] of indexedByFolder) {
+    reportByFolder.set(folderPath, buildLocalAlbumReport(folderEntries));
     const readableEntries = folderEntries.filter(({ relativePath, error }) => {
       if (!error) return true;
       warnings.push(`Could not read, skipped: ${relativePath} (${error?.message || error})`);
@@ -509,9 +514,13 @@ export async function buildLibraryIndex(filesByPath, onProgress = () => {}) {
   const library = [...folders.keys()]
     .map((folderPath) => libraryByFolder.get(folderPath))
     .filter(Boolean);
+  const report = createLocalLibraryReport(
+    [...folders.keys()].map((folderPath) => reportByFolder.get(folderPath)).filter(Boolean)
+  );
 
   return {
     library,
+    report,
     warnings,
     audioFileCount: audioEntries.length,
     reusedAlbumCount,
@@ -553,7 +562,15 @@ export function collectInputFiles(fileList) {
 }
 
 export async function saveIndexToDirectory(directoryHandle, json) {
-  const fileHandle = await directoryHandle.getFileHandle("library.json", { create: true });
+  await saveJsonToDirectory(directoryHandle, "library.json", json);
+}
+
+export async function saveReportToDirectory(directoryHandle, json) {
+  await saveJsonToDirectory(directoryHandle, "library-report.json", json);
+}
+
+async function saveJsonToDirectory(directoryHandle, filename, json) {
+  const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
   const writable = await fileHandle.createWritable();
   await writable.write(json);
   await writable.close();
@@ -576,10 +593,18 @@ export async function saveIndexWithFilePicker(json) {
 }
 
 export function downloadIndex(json) {
+  downloadJson(json, "library.json");
+}
+
+export function downloadReport(json) {
+  downloadJson(json, "library-report.json");
+}
+
+function downloadJson(json, filename) {
   const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = "library.json";
+  link.download = filename;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

@@ -1,6 +1,7 @@
 const SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/";
 
 let renderer = null;
+let discoveredRenderers = [];
 const BRIDGE_URL = "http://localhost:9181";
 
 function localName(tag) {
@@ -34,14 +35,25 @@ export async function loadRendererDescription(descriptionUrl) {
 }
 
 export async function loadBridgeRenderer(bridgeUrl = BRIDGE_URL) {
+  const renderers = await discoverBridgeRenderers(bridgeUrl);
+  return selectBridgeRenderer(renderers[0], bridgeUrl);
+}
+
+export async function discoverBridgeRenderers(bridgeUrl = BRIDGE_URL) {
   const response = await fetch(`${bridgeUrl.replace(/\/$/, "")}/renderers`, {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) throw new Error(`UPnP bridge returned HTTP ${response.status}.`);
   const payload = await response.json();
-  const found = payload.renderers?.[0];
-  if (!found) throw new Error("The bridge found no UPnP renderer.");
+  discoveredRenderers = Array.isArray(payload.renderers) ? payload.renderers : [];
+  if (!discoveredRenderers.length) throw new Error("The bridge found no UPnP renderer.");
+  return discoveredRenderers;
+}
+
+export function selectBridgeRenderer(found, bridgeUrl = BRIDGE_URL) {
+  if (!found?.id) throw new Error("The selected renderer has no device identifier.");
   renderer = { ...found, mode: "bridge", bridgeUrl: bridgeUrl.replace(/\/$/, "") };
+  window.dispatchEvent(new CustomEvent("playback-output-change"));
   return renderer;
 }
 
@@ -126,4 +138,7 @@ export async function getRendererState() {
 
 export function getRenderer() { return renderer; }
 
-export function disconnectRenderer() { renderer = null; }
+export function disconnectRenderer() {
+  renderer = null;
+  window.dispatchEvent(new CustomEvent("playback-output-change"));
+}

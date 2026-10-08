@@ -7,17 +7,25 @@ import {
   chooseWritableMusicFolder,
   collectInputFiles,
   downloadIndex,
+  downloadReport,
   saveIndexToDirectory,
+  saveReportToDirectory,
   saveIndexWithFilePicker,
 } from "./browserIndexer.js";
+import { validateLocalLibraryReport } from "./localLibraryReport.mjs";
 import { setActiveLibrarySource } from "../core/librarySource.js";
 
 let selectedFilesByPath = new Map();
 let selectedLibrary = null;
+let localLibraryReport = null;
 let libraryError = "";
 let localAlbumsByMbid = new Map();
 let localTracksByRelease = new Map();
 const SUPPORTED_AUDIO_EXTENSIONS = [".flac", ".m4a"];
+
+function notifyLibraryState() {
+  window.dispatchEvent(new CustomEvent("music-library-state-change", { detail: { source: "local" } }));
+}
 
 function mbidKey(value) {
   return String(value || "").trim().toLowerCase();
@@ -141,6 +149,67 @@ async function loadLibraryJson() {
   return validateLibrary(data);
 }
 
+async function loadLibraryReport() {
+  const file = selectedFilesByPath.get("library-report.json");
+  if (!file) return null;
+  try {
+    return validateLocalLibraryReport(JSON.parse(await file.text()));
+  } catch (error) {
+    console.warn("Could not read library-report.json:", error);
+    return null;
+  }
+}
+
+function albumReportName(album) {
+  const artist = String(album?.artist || "").trim();
+  const title = String(album?.title || "").trim();
+  return [artist, title].filter(Boolean).join(" — ") || "Unknown album metadata";
+}
+
+function renderLocalLibraryReport(root) {
+  const dialog = root.getElementById("localInventoryDialog");
+  if (!dialog || !localLibraryReport) return false;
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  const categories = [
+    ["ready", "localReadyAlbums", "localReadyCount"],
+    ["partial", "localPartialAlbums", "localPartialCount"],
+    ["untagged", "localUntaggedAlbums", "localUntaggedCount"],
+    ["incomplete", "localIncompleteAlbums", "localIncompleteCount"],
+  ];
+
+  for (const [category, listId, countId] of categories) {
+    const albums = localLibraryReport.albums
+      .filter((album) => album.category === category)
+      .sort((a, b) => collator.compare(a.artist || "", b.artist || "") ||
+        collator.compare(a.title || "", b.title || ""));
+    const list = root.getElementById(listId);
+    root.getElementById(countId).textContent = String(albums.length);
+    list.replaceChildren();
+    for (const album of albums) {
+      const item = root.createElement("li");
+      const name = albumReportName(album);
+      if (album.mbid) {
+        const link = root.createElement("a");
+        link.href = `https://musicbrainz.org/release/${album.mbid}`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = name;
+        item.append(link);
+      } else {
+        item.append(name);
+      }
+      if (album.issues?.length) {
+        const issues = root.createElement("small");
+        issues.className = "library-inventory-issues";
+        issues.textContent = album.issues.join("; ");
+        item.append(issues);
+      }
+      list.append(item);
+    }
+  }
+  return true;
+}
+
 function statusText() {
   if (libraryError) return libraryError;
   if (!selectedLibrary) return "Your Music folder is not connected.";
@@ -171,6 +240,21 @@ export function getLocalFile(relativePath) {
 
 export function getLocalLibrary() {
   return selectedLibrary;
+}
+
+export function getLocalLibrarySummary() {
+  const reportCounts = { ready: 0, partial: 0, untagged: 0, incomplete: 0 };
+  for (const album of localLibraryReport?.albums || []) {
+    if (Object.hasOwn(reportCounts, album.category)) reportCounts[album.category] += 1;
+  }
+  return {
+    connected: !!selectedLibrary,
+    identifiedAlbumCount: selectedLibrary?.length || 0,
+    detectedAlbumCount: detectedAlbumFolderCount(),
+    playableAlbumCount: playableAlbumCount(),
+    hasReport: !!localLibraryReport,
+    reportCounts,
+  };
 }
 
 export function getLocalAlbum(releaseMbid) {
@@ -297,10 +381,20 @@ export function bindLocalLibraryPicker(root = document) {
   const input = root.getElementById("musicFolderInput");
   const indexInput = root.getElementById("indexMusicFolderInput");
   const status = root.getElementById("musicFolderStatus");
+  const reportButton = root.getElementById("showLocalInventory");
+  const reportDialog = root.getElementById("localInventoryDialog");
 
   if (!button || !indexButton || !input || !indexInput || !status || button.dataset.bound === "1") return;
   button.dataset.bound = "1";
   renderStatus(status);
+  if (reportButton) reportButton.hidden = !localLibraryReport;
+
+  const showReport = () => {
+    if (!renderLocalLibraryReport(root)) return;
+    reportButton?.closest("dialog")?.close();
+    reportDialog?.showModal();
+  };
+  reportButton?.addEventListener("click", showReport);
 
   button.addEventListener("click", () => input.click());
 
@@ -308,6 +402,7 @@ export function bindLocalLibraryPicker(root = document) {
     setActiveLibrarySource("local");
     storeSelectedFiles(input.files);
     selectedLibrary = null;
+    localLibraryReport = null;
     rebuildLocalIndex();
     libraryError = "";
     status.classList.remove("err");
@@ -315,6 +410,7 @@ export function bindLocalLibraryPicker(root = document) {
 
     try {
       selectedLibrary = await loadLibraryJson();
+      localLibraryReport = await loadLibraryReport();
       rebuildLocalIndex();
     } catch (error) {
       rebuildLocalIndex();
@@ -322,6 +418,8 @@ export function bindLocalLibraryPicker(root = document) {
     }
 
     renderStatus(status);
+    if (reportButton) reportButton.hidden = !localLibraryReport;
+    notifyLibraryState();
   });
 
   async function createIndex(filesByPath, directoryHandle = null) {
@@ -334,6 +432,9 @@ export function bindLocalLibraryPicker(root = document) {
         status.textContent = `Indexing ${current.toLocaleString()} of ${total.toLocaleString()} audio files…`;
       });
       const json = `${JSON.stringify(result.library, null, 4)}\n`;
+      const reportJson = `${JSON.stringify(result.report, null, 4)}\n`;
+      localLibraryReport = result.report;
+      if (reportButton) reportButton.hidden = false;
       const reused = result.reusedAlbumCount
         ? ` ${result.reusedAlbumCount.toLocaleString()} unchanged albums reused.`
         : "";
@@ -342,26 +443,33 @@ export function bindLocalLibraryPicker(root = document) {
 
       if (!approved) {
         status.textContent = `Index created but not saved.\n${summary}`;
+        showReport();
         return;
       }
 
       if (directoryHandle) {
         await saveIndexToDirectory(directoryHandle, json);
-        status.textContent = `library.json saved in the selected Music folder.\n${summary}`;
+        await saveReportToDirectory(directoryHandle, reportJson);
+        status.textContent = `library.json and library-report.json saved in the selected Music folder.\n${summary}`;
       } else {
         const savedWithPicker = await saveIndexWithFilePicker(json);
         if (savedWithPicker) {
-          status.textContent = `library.json saved. Keep it in the selected Music folder.\n${summary}`;
+          downloadReport(reportJson);
+          status.textContent = `library.json saved and library-report.json downloaded. Keep both in the selected Music folder.\n${summary}`;
         } else {
           downloadIndex(json);
-          status.textContent = `Place the downloaded library.json file in the selected Music folder.\n${summary}`;
+          downloadReport(reportJson);
+          status.textContent = `Place the downloaded library.json and library-report.json files in the selected Music folder.\n${summary}`;
         }
       }
 
       storeSelectedFileMap(filesByPath);
       selectedLibrary = validateLibrary(result.library);
       rebuildLocalIndex();
+      setActiveLibrarySource("local");
+      notifyLibraryState();
       if (result.warnings.length) console.warn("Library index warnings:", result.warnings);
+      showReport();
     } catch (error) {
       if (error?.name === "AbortError") return;
       libraryError = error?.message || "Could not create library.json.";

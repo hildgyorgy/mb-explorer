@@ -2,12 +2,18 @@ import argparse
 import datetime
 import json
 import os
+import re
 import struct
 import time
 
 
 SUPPORTED_EXTENSIONS = (".flac", ".m4a")
 INDEX_VERSION = 2
+REPORT_VERSION = 1
+MBID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 
 
 def parse_arguments():
@@ -67,6 +73,98 @@ def first(tags, *names):
         if values:
             return values[0]
     return None
+
+
+def is_mbid(value):
+    return bool(MBID_PATTERN.fullmatch(str(value or "").strip()))
+
+
+def metadata_field_summary(items, field):
+    values = [str(item.get(field) or "").strip() for item in items]
+    present = [value for value in values if value]
+    return {
+        "value": present[0] if present else "",
+        "complete": len(present) == len(items),
+        "consistent": len({value.casefold() for value in present}) <= 1,
+    }
+
+
+def build_album_report(metadata, total_file_count):
+    artist = metadata_field_summary(metadata, "artist_name")
+    title = metadata_field_summary(metadata, "album_name")
+    raw_release_ids = [
+        str(item.get("album_mbid") or "").strip()
+        for item in metadata
+        if str(item.get("album_mbid") or "").strip()
+    ]
+    release_ids = sorted({value.lower() for value in raw_release_ids if is_mbid(value)})
+    missing_release = sum(not is_mbid(item.get("album_mbid")) for item in metadata)
+    missing_recording = sum(not is_mbid(item.get("track_mbid")) for item in metadata)
+    missing_release_track = sum(not is_mbid(item.get("release_track_mbid")) for item in metadata)
+    unreadable = max(0, total_file_count - len(metadata))
+    display_complete = bool(
+        metadata
+        and artist["value"] and artist["complete"] and artist["consistent"]
+        and title["value"] and title["complete"] and title["consistent"]
+    )
+    fully_tagged = bool(
+        display_complete and not unreadable and len(release_ids) == 1
+        and not missing_release and not missing_recording and not missing_release_track
+    )
+
+    if fully_tagged:
+        category = "ready"
+    elif raw_release_ids:
+        category = "partial"
+    elif display_complete:
+        category = "untagged"
+    else:
+        category = "incomplete"
+
+    issues = []
+    if unreadable:
+        issues.append(f"{unreadable} unreadable audio file" + ("" if unreadable == 1 else "s"))
+    if len(release_ids) > 1:
+        issues.append("multiple Release MBIDs")
+    if raw_release_ids and missing_release:
+        issues.append(f"{missing_release} missing or invalid Release MBID" + ("" if missing_release == 1 else "s"))
+    if not raw_release_ids:
+        issues.append("Release MBID missing")
+    if raw_release_ids and missing_recording:
+        issues.append(f"{missing_recording} missing or invalid recording MBID" + ("" if missing_recording == 1 else "s"))
+    if raw_release_ids and missing_release_track:
+        issues.append(f"{missing_release_track} missing or invalid release-track MBID" + ("" if missing_release_track == 1 else "s"))
+    if not artist["complete"] or not artist["value"]:
+        issues.append("album artist missing")
+    elif not artist["consistent"]:
+        issues.append("album artist differs between files")
+    if not title["complete"] or not title["value"]:
+        issues.append("album title missing")
+    elif not title["consistent"]:
+        issues.append("album title differs between files")
+
+    return {
+        "category": category,
+        "artist": artist["value"] if artist["consistent"] else "",
+        "title": title["value"] if title["consistent"] else "",
+        "mbid": release_ids[0] if len(release_ids) == 1 else "",
+        "trackCount": len(metadata),
+        "issues": issues,
+    }
+
+
+def report_from_indexed_album(album):
+    metadata = [
+        {
+            "artist_name": album.get("artist_name"),
+            "album_name": album.get("album_name"),
+            "album_mbid": album.get("album_mbid"),
+            "track_mbid": track.get("track_mbid"),
+            "release_track_mbid": track.get("release_track_mbid"),
+        }
+        for track in album.get("tracks", [])
+    ]
+    return build_album_report(metadata, len(metadata))
 
 
 def metadata_from_tags(file_path, tags):
@@ -387,6 +485,7 @@ def main():
     started_at = time.perf_counter()
     print(f"🎵 Music library indexing started: {music_dir}")
     library = []
+    report_albums = []
     skipped_missing_release_mbid = 0
     existing_library = load_existing_library(output_path)
 
@@ -405,6 +504,7 @@ def main():
         existing_album = existing_library.get(relative_path)
         if existing_album and album_is_unchanged(existing_album, root, audio_files):
             library.append(existing_album)
+            report_albums.append(report_from_indexed_album(existing_album))
             print(
                 "♻️ Unchanged: "
                 f"{existing_album.get('artist_name') or '?'} - "
@@ -414,6 +514,7 @@ def main():
             continue
 
         tracks = []
+        folder_metadata = []
         album_meta = None
 
         for audio_file in audio_files:
@@ -423,6 +524,8 @@ def main():
             except Exception as error:
                 print(f"⚠️ Could not read, skipped: {file_path} ({error})")
                 continue
+
+            folder_metadata.append(metadata)
 
             if album_meta is None:
                 album_meta = metadata
@@ -456,6 +559,7 @@ def main():
                 ).isoformat().replace("+00:00", "Z"),
             })
 
+        report_albums.append(build_album_report(folder_metadata, len(audio_files)))
         if album_meta is None:
             continue
         if not album_meta["album_mbid"]:
@@ -498,8 +602,25 @@ def main():
         if os.path.exists(temporary_path):
             os.remove(temporary_path)
 
+    report_path = os.path.join(output_directory or ".", "library-report.json")
+    report_temporary_path = report_path + ".tmp"
+    report = {
+        "report_version": REPORT_VERSION,
+        "generated_at": datetime.datetime.now(tz=datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+        "albums": report_albums,
+    }
+    try:
+        with open(report_temporary_path, "w", encoding="utf-8") as output_file:
+            json.dump(report, output_file, ensure_ascii=False, indent=4)
+            output_file.write("\n")
+        os.replace(report_temporary_path, report_path)
+    finally:
+        if os.path.exists(report_temporary_path):
+            os.remove(report_temporary_path)
+
     elapsed_seconds = time.perf_counter() - started_at
     print(f"\n🎉 SUCCESS! The library index has been created: {output_path}")
+    print(f"📋 Tagging report created: {report_path}")
     if skipped_missing_release_mbid:
         noun = "folder" if skipped_missing_release_mbid == 1 else "folders"
         print(
