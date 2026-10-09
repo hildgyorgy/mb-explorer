@@ -4,7 +4,7 @@ import {
   setActiveLibrarySource,
 } from "../core/librarySource.js";
 import { getLocalLibrarySummary } from "../services/localLibrary.js";
-import { getNavidromeStatus, getNavidromeSummary } from "../services/navidrome.js";
+import { getNavidromeSummary } from "../services/navidrome.js";
 import {
   discoverBridgeRenderers,
   disconnectRenderer,
@@ -16,18 +16,14 @@ function rendererName(renderer) {
   return renderer?.friendlyName || renderer?.name || "UPnP renderer";
 }
 
-function showSourcePanel(source) {
-  const local = source !== "navidrome";
-  const localTab = document.getElementById("sourceLocalTab");
-  const navidromeTab = document.getElementById("sourceNavidromeTab");
-  const localPanel = document.getElementById("sourceLocalPanel");
-  const navidromePanel = document.getElementById("sourceNavidromePanel");
-  localTab?.classList.toggle("is-selected", local);
-  navidromeTab?.classList.toggle("is-selected", !local);
-  localTab?.setAttribute("aria-selected", String(local));
-  navidromeTab?.setAttribute("aria-selected", String(!local));
-  if (localPanel) localPanel.hidden = !local;
-  if (navidromePanel) navidromePanel.hidden = local;
+function setSelected(button, selected) {
+  button?.classList.toggle("is-selected", selected);
+  button?.setAttribute("aria-pressed", String(selected));
+}
+
+function openSettings(dialog, trigger) {
+  trigger?.closest("dialog")?.close();
+  dialog?.showModal();
 }
 
 function compatibilitySummary(source, local, navidrome) {
@@ -58,24 +54,23 @@ export function refreshPlaybackSetup(root = document) {
   const local = getLocalLibrarySummary();
   const navidrome = getNavidromeSummary();
   const renderer = getRenderer();
-  const sourceLabel = root.getElementById("homeSourceLabel");
-  const outputLabel = root.getElementById("homeOutputLabel");
   const compatibility = root.getElementById("homeCompatibilityStatus");
   const compatibilityLabel = root.getElementById("homeCompatibilityLabel");
-  const navidromeStatus = root.getElementById("navidromeSourceStatus");
   const compatibilityState = compatibilitySummary(source, local, navidrome);
 
-  if (sourceLabel) {
-    sourceLabel.textContent = source === "navidrome" && (navidrome.connected || navidrome.remembered)
-      ? navidrome.name
-      : source === "local" && (local.connected || local.remembered)
-        ? "Local music folder"
-        : "Choose a music library";
-  }
-  if (outputLabel) outputLabel.textContent = renderer ? rendererName(renderer) : "System audio";
+  setSelected(root.getElementById("homeSourceLocal"), source === "local");
+  setSelected(root.getElementById("homeSourceNavidrome"), source === "navidrome");
+  setSelected(root.getElementById("homeOutputSystem"), !renderer);
+  setSelected(root.getElementById("homeOutputRenderer"), !!renderer);
   if (compatibility) compatibility.textContent = compatibilityState.value;
   if (compatibilityLabel) compatibilityLabel.textContent = compatibilityState.label;
-  if (navidromeStatus) navidromeStatus.textContent = getNavidromeStatus();
+
+  const localChoice = root.getElementById("homeSourceLocal");
+  const navidromeChoice = root.getElementById("homeSourceNavidrome");
+  const rendererChoice = root.getElementById("homeOutputRenderer");
+  if (localChoice) localChoice.title = source === "local" ? "Open local folder settings" : "Use the local music folder";
+  if (navidromeChoice) navidromeChoice.title = source === "navidrome" ? "Open Navidrome settings" : "Use Navidrome";
+  if (rendererChoice) rendererChoice.title = renderer ? `Configure ${rendererName(renderer)}` : "Choose a UPnP renderer";
 
   const localReport = root.getElementById("showLocalInventory");
   const navidromeReport = root.getElementById("showNavidromeInventory");
@@ -85,7 +80,6 @@ export function refreshPlaybackSetup(root = document) {
   root.querySelectorAll(".output-option[data-renderer-id]").forEach((button) => {
     button.classList.toggle("is-selected", !!renderer && button.dataset.rendererId === String(renderer.id));
   });
-  root.getElementById("systemOutput")?.classList.toggle("is-selected", !renderer);
 }
 
 function bindDialogBackdrop(dialog) {
@@ -99,33 +93,12 @@ function bindDialogBackdrop(dialog) {
 function bindPersistentSetup(root) {
   const sourceDialog = root.getElementById("sourceDialog");
   const outputDialog = root.getElementById("outputDialog");
-  const localTab = root.getElementById("sourceLocalTab");
-  const navidromeTab = root.getElementById("sourceNavidromeTab");
-  const systemOutput = root.getElementById("systemOutput");
   const discover = root.getElementById("discoverRenderers");
   const outputOptions = root.getElementById("outputOptions");
   const rendererStatus = root.getElementById("rendererStatus");
 
   bindDialogBackdrop(sourceDialog);
   bindDialogBackdrop(outputDialog);
-
-  localTab?.addEventListener("click", () => {
-    showSourcePanel("local");
-    setActiveLibrarySource("local");
-  });
-  navidromeTab?.addEventListener("click", () => {
-    showSourcePanel("navidrome");
-    setActiveLibrarySource("navidrome");
-  });
-
-  systemOutput?.addEventListener("click", () => {
-    disconnectRenderer();
-    if (rendererStatus) {
-      rendererStatus.classList.remove("err");
-      rendererStatus.textContent = "System audio selected.";
-    }
-    outputDialog?.close();
-  });
 
   discover?.addEventListener("click", async () => {
     discover.disabled = true;
@@ -155,7 +128,7 @@ function bindPersistentSetup(root) {
         button.addEventListener("click", () => {
           selectBridgeRenderer(found);
           if (rendererStatus) rendererStatus.textContent = `${rendererName(found)} selected.`;
-          outputDialog?.close();
+          outputDialog?.querySelector(".search-help-close")?.click();
         });
         outputOptions?.append(button);
       }
@@ -171,10 +144,7 @@ function bindPersistentSetup(root) {
     }
   });
 
-  onLibrarySourceChange(() => {
-    showSourcePanel(getActiveLibrarySource());
-    refreshPlaybackSetup(root);
-  });
+  onLibrarySourceChange(() => refreshPlaybackSetup(root));
   window.addEventListener("music-library-state-change", () => refreshPlaybackSetup(root));
   window.addEventListener("playback-output-change", () => refreshPlaybackSetup(root));
 }
@@ -187,25 +157,38 @@ export function bindPlaybackSetup(root = document) {
 
   const sourceDialog = root.getElementById("sourceDialog");
   const outputDialog = root.getElementById("outputDialog");
-  const sourceOpen = root.getElementById("openSourceSheet");
-  const outputOpen = root.getElementById("openOutputSheet");
+  const navidromeDialog = root.getElementById("navidromeDialog");
+  const localChoice = root.getElementById("homeSourceLocal");
+  const navidromeChoice = root.getElementById("homeSourceNavidrome");
+  const systemChoice = root.getElementById("homeOutputSystem");
+  const rendererChoice = root.getElementById("homeOutputRenderer");
   const compatibility = root.getElementById("openCompatibilityReport");
 
-  if (sourceOpen?.dataset.bound !== "1") {
-    sourceOpen.dataset.bound = "1";
-    sourceOpen.addEventListener("click", () => {
-      sourceOpen.closest("dialog")?.close();
-      showSourcePanel(getActiveLibrarySource());
-      refreshPlaybackSetup(root);
-      sourceDialog?.showModal();
+  if (localChoice?.dataset.bound !== "1") {
+    localChoice.dataset.bound = "1";
+    localChoice.addEventListener("click", () => {
+      if (getActiveLibrarySource() !== "local") setActiveLibrarySource("local");
+      else openSettings(sourceDialog, localChoice);
     });
   }
-  if (outputOpen?.dataset.bound !== "1") {
-    outputOpen.dataset.bound = "1";
-    outputOpen.addEventListener("click", () => {
-      outputOpen.closest("dialog")?.close();
+  if (navidromeChoice?.dataset.bound !== "1") {
+    navidromeChoice.dataset.bound = "1";
+    navidromeChoice.addEventListener("click", () => {
+      if (getActiveLibrarySource() !== "navidrome") setActiveLibrarySource("navidrome");
+      else openSettings(navidromeDialog, navidromeChoice);
+    });
+  }
+  if (systemChoice?.dataset.bound !== "1") {
+    systemChoice.dataset.bound = "1";
+    systemChoice.addEventListener("click", () => {
+      if (getRenderer()) disconnectRenderer();
+    });
+  }
+  if (rendererChoice?.dataset.bound !== "1") {
+    rendererChoice.dataset.bound = "1";
+    rendererChoice.addEventListener("click", () => {
       refreshPlaybackSetup(root);
-      outputDialog?.showModal();
+      openSettings(outputDialog, rendererChoice);
     });
   }
   if (compatibility?.dataset.bound !== "1") {
@@ -215,13 +198,9 @@ export function bindPlaybackSetup(root = document) {
       const source = getActiveLibrarySource();
       const report = root.getElementById(source === "navidrome" ? "showNavidromeInventory" : "showLocalInventory");
       if (report && !report.hidden) report.click();
-      else {
-        showSourcePanel(source);
-        sourceDialog?.showModal();
-      }
+      else (source === "navidrome" ? navidromeDialog : sourceDialog)?.showModal();
     });
   }
 
-  showSourcePanel(getActiveLibrarySource());
   refreshPlaybackSetup(root);
 }

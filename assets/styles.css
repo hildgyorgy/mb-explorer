@@ -492,61 +492,6 @@ a:hover {
   text-transform: uppercase;
 }
 
-.setup-control {
-  width: min(130px, 100%);
-  margin: 0 auto 18px;
-  padding: 0;
-  display: block;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-  cursor: pointer;
-}
-
-.setup-control-name {
-  min-height: 32px;
-  padding: 0 16px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  color: var(--panel);
-  background: var(--system-blue);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .3em;
-  text-transform: uppercase;
-  transition: transform 120ms ease, filter 120ms ease;
-}
-
-.setup-control:hover .setup-control-name,
-.setup-control:focus-visible .setup-control-name {
-  filter: brightness(1.15);
-  transform: translateY(-1px);
-}
-
-.setup-control:focus-visible {
-  outline: none;
-}
-
-.setup-control-value {
-  width: max-content;
-  max-width: min(320px, calc(100vw - 48px));
-  min-height: 18px;
-  margin: 8px 0 0 50%;
-  display: block;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 560;
-  letter-spacing: .15em;
-  line-height: 1.5;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
 .setup-compatibility {
   margin: 16px auto 0;
   padding: 16px 18px;
@@ -720,33 +665,58 @@ a:hover {
   letter-spacing: -.015em;
 }
 
-.help-playback-setup .setup-control {
+.setup-choice-row {
   width: 100%;
-  margin: 0 0 32px;
+  margin: 0 0 24px;
   display: grid;
-  grid-template-columns: 107px minmax(0, 1fr);
+  grid-template-columns: 108px minmax(0, 1fr);
   align-items: center;
-  gap: 43px;
-  text-align: left;
+  gap: 16px;
 }
 
-.help-playback-setup .setup-control-name {
-  min-height: 28px;
+.setup-choice-label {
+  color: var(--meta);
+  font-size: 14px;
+  font-weight: 520;
+}
+
+.setup-segmented {
+  padding: 2px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.setup-segmented button {
+  min-width: 0;
+  min-height: 36px;
   padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 140ms ease, background-color 140ms ease, filter 140ms ease;
 }
 
-.help-playback-setup .setup-control-value {
-  width: auto;
-  max-width: 100%;
-  min-height: 0;
-  margin: 0;
-  color: var(--muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: .16em;
-  text-align: left;
-  transform: none;
+.setup-segmented button.is-selected {
+  color: #fff;
+  background: var(--system-blue);
+}
+
+.setup-segmented button:hover {
+  filter: brightness(1.08);
+}
+
+.setup-segmented button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--system-blue) 55%, transparent);
+  outline-offset: 2px;
 }
 
 .help-playback-setup .setup-compatibility {
@@ -891,10 +861,6 @@ a:hover {
   margin-bottom: 0;
 }
 
-#searchHelpDialog #openOutputSheet {
-  margin-bottom: 0;
-}
-
 #searchHelpDialog .empty-help code {
   margin-top: 6px;
   font-size: 13px;
@@ -911,9 +877,15 @@ a:hover {
     padding: 26px 24px 28px;
   }
 
-  .help-playback-setup .setup-control {
-    grid-template-columns: 107px minmax(0, 1fr);
-    gap: 16px;
+  .setup-choice-row {
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .setup-segmented button {
+    padding-inline: 8px;
+    font-size: 9px;
+    letter-spacing: .07em;
   }
 
   .help-playback-setup .setup-compatibility {
@@ -936,45 +908,8 @@ a:hover {
   overflow-y: auto;
 }
 
-.source-switch {
-  margin: 0 auto 25px;
-  padding: 3px;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border-radius: 999px;
-  background: var(--panel-2);
-}
-
-.source-switch button {
-  min-height: 40px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 999px;
-  color: var(--muted);
-  background: transparent;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.source-switch button.is-selected {
-  color: var(--panel);
-  background: var(--text);
-}
-
 .source-panel[hidden] {
   display: none;
-}
-
-.sheet-eyebrow {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .17em;
-  text-transform: uppercase;
 }
 
 .sheet-actions {

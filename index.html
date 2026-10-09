@@ -70,15 +70,10 @@
   <dialog class="search-help-dialog setup-sheet" id="sourceDialog" aria-labelledby="sourceTitle"
     data-return-dialog="searchHelpDialog">
     <div class="search-help-head">
-      <h2 id="sourceTitle">Music source</h2>
+      <h2 id="sourceTitle">Local music folder</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
     </div>
-    <div class="source-switch" role="tablist" aria-label="Music library source">
-      <button id="sourceLocalTab" type="button" role="tab" aria-controls="sourceLocalPanel">Local</button>
-      <button id="sourceNavidromeTab" type="button" role="tab" aria-controls="sourceNavidromePanel">Navidrome</button>
-    </div>
-    <section class="source-panel" id="sourceLocalPanel" role="tabpanel">
-      <p class="sheet-eyebrow">Local music folder</p>
+    <section class="source-panel" id="sourceLocalPanel">
       <p class="local-library-status muted" id="musicFolderStatus" role="status" aria-live="polite">Your Music folder is not connected</p>
       <div class="sheet-actions">
         <button class="onboarding-action" id="openMusicFolder" type="button">
@@ -94,38 +89,22 @@
       <input id="musicFolderInput" type="file" webkitdirectory multiple hidden>
       <input id="indexMusicFolderInput" type="file" webkitdirectory multiple hidden>
     </section>
-    <section class="source-panel" id="sourceNavidromePanel" role="tabpanel" hidden>
-      <p class="sheet-eyebrow">Navidrome music library</p>
-      <p class="local-library-status muted" id="navidromeSourceStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
-      <div class="sheet-actions">
-        <button class="onboarding-action" id="openNavidrome" type="button">
-          <span class="onboarding-copy"><strong>Connect or configure</strong><span>Use your Navidrome server as the searchable playback library.</span></span>
-          <span class="onboarding-arrow" aria-hidden="true">→</span>
-        </button>
-      </div>
-      <button class="pill sheet-secondary-action" id="showNavidromeInventory" type="button" hidden>Show MusicBrainz compatibility report</button>
-    </section>
   </dialog>
 
   <dialog class="search-help-dialog setup-sheet" id="outputDialog" aria-labelledby="outputTitle"
     data-return-dialog="searchHelpDialog">
     <div class="search-help-head">
-      <h2 id="outputTitle">Playback output</h2>
+      <h2 id="outputTitle">UPnP renderer</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
     </div>
-    <div class="output-options" id="outputOptions">
-      <button class="output-option is-selected" id="systemOutput" type="button">
-        <span><strong>System audio</strong><small>This browser and the selected system output.</small></span>
-        <span class="output-check" aria-hidden="true">✓</span>
-      </button>
-    </div>
+    <div class="output-options" id="outputOptions"></div>
     <button class="pill discover-renderers" id="discoverRenderers" type="button">Discover UPnP renderers</button>
     <p class="local-library-status muted" id="rendererStatus" role="status" aria-live="polite">The local MusiCards bridge is not connected.</p>
     <p class="sheet-note muted">Network renderers are available for Navidrome playback through the local MusiCards UPnP bridge.</p>
   </dialog>
 
   <dialog class="search-help-dialog" id="navidromeDialog" aria-labelledby="navidromeTitle"
-    data-return-dialog="sourceDialog">
+    data-return-dialog="searchHelpDialog">
     <div class="search-help-head">
       <h2 id="navidromeTitle">Connect Navidrome</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
@@ -138,10 +117,12 @@
       <p class="local-library-status muted" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
       <button class="onboarding-action" type="submit"><span class="onboarding-copy"><strong>Connect</strong><span>This device remembers a reusable login token; your original password is not stored.</span></span><span class="onboarding-arrow" aria-hidden="true">→</span></button>
       <button class="pill navidrome-disconnect" id="disconnectNavidrome" type="button" hidden>Disconnect Navidrome</button>
+      <button class="pill sheet-secondary-action" id="showNavidromeInventory" type="button" hidden>Show MusicBrainz compatibility report</button>
     </form>
   </dialog>
 
-  <dialog class="search-help-dialog navidrome-inventory-dialog" id="localInventoryDialog" aria-labelledby="localInventoryTitle">
+  <dialog class="search-help-dialog navidrome-inventory-dialog" id="localInventoryDialog" aria-labelledby="localInventoryTitle"
+    data-return-dialog="searchHelpDialog">
     <div class="search-help-head">
       <h2 id="localInventoryTitle">Local music tagging report</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
@@ -157,7 +138,8 @@
     <ol class="navidrome-inventory-list" id="localIncompleteAlbums"></ol>
   </dialog>
 
-  <dialog class="search-help-dialog navidrome-inventory-dialog" id="navidromeInventoryDialog" aria-labelledby="navidromeInventoryTitle">
+  <dialog class="search-help-dialog navidrome-inventory-dialog" id="navidromeInventoryDialog" aria-labelledby="navidromeInventoryTitle"
+    data-return-dialog="searchHelpDialog">
     <div class="search-help-head">
       <h2 id="navidromeInventoryTitle">Navidrome albums</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
@@ -195,15 +177,21 @@
     <div class="help-playback-setup">
       <h3>Play MusicBrainz-tagged music from your library</h3>
 
-      <button class="setup-control" id="openSourceSheet" type="button" aria-haspopup="dialog">
-        <span class="setup-control-name">Source</span>
-        <span class="setup-control-value" id="homeSourceLabel">Choose a music library</span>
-      </button>
+      <div class="setup-choice-row">
+        <span class="setup-choice-label">Source:</span>
+        <div class="setup-segmented" role="group" aria-label="Music source">
+          <button id="homeSourceLocal" type="button" aria-pressed="false">Local</button>
+          <button id="homeSourceNavidrome" type="button" aria-pressed="false">Navidrome</button>
+        </div>
+      </div>
 
-      <button class="setup-control" id="openOutputSheet" type="button" aria-haspopup="dialog">
-        <span class="setup-control-name">Output</span>
-        <span class="setup-control-value" id="homeOutputLabel">System audio</span>
-      </button>
+      <div class="setup-choice-row">
+        <span class="setup-choice-label">Output:</span>
+        <div class="setup-segmented" role="group" aria-label="Playback output">
+          <button id="homeOutputSystem" type="button" aria-pressed="false">System audio</button>
+          <button id="homeOutputRenderer" type="button" aria-pressed="false">UPnP renderer</button>
+        </div>
+      </div>
 
       <button class="setup-compatibility" id="openCompatibilityReport" type="button">
         <span id="homeCompatibilityStatus">No library connected</span>

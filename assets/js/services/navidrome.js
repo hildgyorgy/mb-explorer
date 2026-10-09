@@ -295,7 +295,6 @@ export function disconnectNavidrome() {
 }
 
 export function bindNavidromePicker(root = document) {
-  const open = root.getElementById("openNavidrome");
   const dialog = root.getElementById("navidromeDialog");
   const form = root.getElementById("navidromeForm");
   const status = root.getElementById("navidromeStatus");
@@ -304,8 +303,8 @@ export function bindNavidromePicker(root = document) {
   const inventoryDialog = root.getElementById("navidromeInventoryDialog");
   const identifiedList = root.getElementById("navidromeIdentifiedAlbums");
   const untaggedList = root.getElementById("navidromeUntaggedAlbums");
-  if (!open || !dialog || !form || !status || open.dataset.bound === "1") return;
-  open.dataset.bound = "1";
+  if (!dialog || !form || !status || form.dataset.bound === "1") return;
+  form.dataset.bound = "1";
   let saved = savedConnection();
   if (saved) {
     form.elements.name.value = saved.name || "";
@@ -315,10 +314,6 @@ export function bindNavidromePicker(root = document) {
   status.textContent = getNavidromeStatus();
   if (inventoryButton) inventoryButton.hidden = !profile;
   if (disconnectButton) disconnectButton.hidden = !profile;
-  open.addEventListener("click", () => {
-    open.closest("dialog")?.close();
-    dialog.showModal();
-  });
   inventoryButton?.addEventListener("click", () => {
     if (!profile || !inventoryDialog || !identifiedList || !untaggedList) return;
     const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
