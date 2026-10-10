@@ -319,6 +319,14 @@ export function getLocalAlbum(releaseMbid) {
   return localAlbumsByMbid.get(mbidKey(releaseMbid)) || null;
 }
 
+export function isLocalReleasePlayable(releaseMbid) {
+  const album = getLocalAlbum(releaseMbid);
+  if (!album) return false;
+  return (album.tracks || []).some((track) =>
+    !!getLocalTrack(releaseMbid, track.track_mbid, track.release_track_mbid)?.file
+  );
+}
+
 export function getLocalTrack(releaseMbid, recordingMbid, releaseTrackMbid = "") {
   const tracks = localTracksByRelease.get(mbidKey(releaseMbid));
   if (!tracks) return null;

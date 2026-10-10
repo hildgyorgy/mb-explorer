@@ -130,6 +130,7 @@ function albumFormat(album) {
 function mapAlbum(album, songs = null) {
   const releaseMbid = canonicalMbid(album.musicBrainzId);
   if (!releaseMbid) return null;
+  const albumSongs = songs || album.song || [];
   return {
     source: "navidrome",
     providerAlbumId: album.id,
@@ -137,8 +138,9 @@ function mapAlbum(album, songs = null) {
     album_name: album.name || album.title || "Untitled album",
     artist_name: album.artist || album.displayArtist || "Unknown artist",
     release_year: album.year || album.releaseDate?.year || null,
-    media_format: albumFormat({ song: songs || album.song || [] }),
-    tracks: (songs || album.song || []).map((song) => ({
+    media_format: albumFormat({ song: albumSongs }),
+    detailsLoaded: Array.isArray(songs) || Array.isArray(album.song),
+    tracks: albumSongs.map((song) => ({
       providerItemId: song.id,
       title: song.title || "Untitled track",
       track_mbid: canonicalMbid(song.musicBrainzId),
@@ -165,6 +167,13 @@ export function streamUrl(songId) {
 
 export function getNavidromeAlbum(releaseMbid) {
   return albumsByRelease.get(key(releaseMbid)) || null;
+}
+
+export function isNavidromeReleasePlayable(releaseMbid) {
+  const album = getNavidromeAlbum(releaseMbid);
+  return !!profile && !!album?.detailsLoaded && (album.tracks || []).some(
+    (track) => !!track.track_mbid && !!track.playbackUrl
+  );
 }
 
 export function getNavidromeTrack(releaseMbid, recordingMbid, mediumPosition, trackPosition, uniqueRecording) {

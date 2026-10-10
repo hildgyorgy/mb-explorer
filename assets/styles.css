@@ -2797,7 +2797,30 @@ align-items: center;
 }
 
 .ver-art {
+  position: relative;
   flex-shrink: 0;
+}
+
+.ver-playable {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--bg);
+  background: var(--text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .28);
+  pointer-events: none;
+}
+
+.ver-playable svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  fill: currentColor;
 }
 
 .ver-thumb {

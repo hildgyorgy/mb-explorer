@@ -5,7 +5,55 @@
 
 import { STATE } from "../core/state.js";
 import { escHtml } from "../core/util.js";
+import { getActiveLibrarySource, onLibrarySourceChange } from "../core/librarySource.js";
 import { fetchJSON } from "../services/api.js";
+import { isLocalReleasePlayable } from "../services/localLibrary.js";
+import {
+  getNavidromeAlbum,
+  isNavidromeConnected,
+  isNavidromeReleasePlayable,
+  prepareNavidromeRelease,
+} from "../services/navidrome.js";
+
+let availabilityRefreshBound = false;
+
+function isReleasePlayable(releaseId) {
+  return getActiveLibrarySource() === "navidrome"
+    ? isNavidromeReleasePlayable(releaseId)
+    : isLocalReleasePlayable(releaseId);
+}
+
+function applyVersionAvailability(root = document) {
+  root.querySelectorAll('.ver-card[data-rel-id]').forEach((card) => {
+    const playable = isReleasePlayable(card.dataset.relId);
+    card.classList.toggle("ver-card--playable", playable);
+    const marker = card.querySelector(".ver-playable");
+    if (marker) marker.hidden = !playable;
+  });
+}
+
+async function refreshVersionAvailability(root = document) {
+  applyVersionAvailability(root);
+  if (getActiveLibrarySource() !== "navidrome" || !isNavidromeConnected()) return;
+
+  const releaseIds = [...root.querySelectorAll('.ver-card[data-rel-id]')]
+    .map((card) => card.dataset.relId)
+    .filter((releaseId) => {
+      const album = getNavidromeAlbum(releaseId);
+      return album && !album.detailsLoaded;
+    });
+  if (!releaseIds.length) return;
+
+  await Promise.allSettled(releaseIds.map((releaseId) => prepareNavidromeRelease(releaseId)));
+  if (getActiveLibrarySource() === "navidrome") applyVersionAvailability(root);
+}
+
+function bindAvailabilityRefreshOnce() {
+  if (availabilityRefreshBound) return;
+  availabilityRefreshBound = true;
+  onLibrarySourceChange(() => refreshVersionAvailability());
+  window.addEventListener("music-library-state-change", () => refreshVersionAvailability());
+}
 
 // Format the medium list: "CD", "2× Vinyl", "CD + DVD" etc.
 function formatMedia(media) {
@@ -59,7 +107,7 @@ function sortByDate(releases) {
 }
 
 // Render one version card (cover + metadata)
-function renderVersionCard(rel, thumbUrl, isCurrent, onNavigate) {
+function renderVersionCard(rel, thumbUrl, isCurrent) {
   const id = escHtml(rel.id);
   const fmt = escHtml(formatMedia(rel.media));
   const date = escHtml(rel.date || "–");
@@ -77,7 +125,12 @@ function renderVersionCard(rel, thumbUrl, isCurrent, onNavigate) {
 
   return `
     <div class="ver-card${isCurrent ? " ver-card--current" : ""}" data-rel-id="${id}">
-      <div class="ver-art">${imgHtml}</div>
+      <div class="ver-art">
+        ${imgHtml}
+        <span class="ver-playable" role="img" title="Playable from your library" aria-label="Playable from your library" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+        </span>
+      </div>
       <div class="ver-meta">
         <div class="ver-row"><span class="ver-k">Format:</span> <span class="ver-v">${fmt || "–"}</span></div>
         <div class="ver-row"><span class="ver-k">Date:</span> <span class="ver-v">${date}</span></div>
@@ -97,6 +150,7 @@ export async function buildVersionsView(onNavigate) {
 
   const rgId = STATE.views.releaseGroupId;
   const currentId = STATE.views.currentReleaseId;
+  bindAvailabilityRefreshOnce();
 
   if (!rgId) {
     view.innerHTML = `<div class="muted ver-empty">No release group data available.</div>`;
@@ -124,10 +178,11 @@ export async function buildVersionsView(onNavigate) {
   const renderAll = (thumbMap) => {
     const html = cards
       .map(({ rel, isCurrent }) =>
-        renderVersionCard(rel, thumbMap.get(rel.id) || null, isCurrent, onNavigate)
+        renderVersionCard(rel, thumbMap.get(rel.id) || null, isCurrent)
       )
       .join("");
     view.innerHTML = `<div class="ver-list">${html}</div>`;
+    refreshVersionAvailability(view);
 
     // Bind click handlers
     view.querySelectorAll(".ver-card:not(.ver-card--current)").forEach((card) => {
