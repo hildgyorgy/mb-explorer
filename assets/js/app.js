@@ -80,8 +80,15 @@ export const App = Object.freeze({
 
       const helpDialog = document.getElementById("searchHelpDialog");
       const helpOpen = document.getElementById("searchHelpOpen");
+      const headerSetupOpen = document.getElementById("headerSetupOpen");
 
-      helpOpen?.addEventListener("click", () => helpDialog?.showModal());
+      [helpOpen, headerSetupOpen].forEach((button) => {
+        if (!button || button.dataset.bound === "1") return;
+        button.dataset.bound = "1";
+        button.addEventListener("click", () => {
+          if (helpDialog && !helpDialog.open) helpDialog.showModal();
+        });
+      });
     };
 
     bindHomeActions();
