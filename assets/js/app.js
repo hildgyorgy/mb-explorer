@@ -7,7 +7,7 @@ import { createReleaseNavigator } from "./services/navigation.js";
 import { applyTheme, getPreferredTheme, bindThemeToggleOnce } from "./ui/theme.js";
 import { createSearchController } from "./ui/searchController.js";
 
-import { loadRelease, loadFirstReleaseOfGroup } from "./services/api.js";
+import { loadRelease, loadReleaseVersions } from "./services/api.js";
 import { renderReleasePage } from "./features/releasePage.js";
 
 import { createMobileHeaderController } from "./ui/mobileHeader.js";
@@ -102,15 +102,22 @@ export const App = Object.freeze({
       getOut: () => document.getElementById("out"),
       loadRelease,
 
-      // Wrap renderReleasePage to inject the onLoadRelease callback
-      // so the artist panel discography can navigate to a release
+      // Wrap renderReleasePage so an artist discography row can open the
+      // corresponding release group directly in the Versions view.
       renderReleasePage: (out, data) =>
         renderReleasePage(out, data,
-          // onLoadRelease: artist panel passes a release GROUP id
-          async (rgId) => {
+          // onLoadRelease: artist panel passes a release group and, when
+          // known, its preferred backing release.
+          async (rgId, preferredReleaseId = "") => {
             try {
-              const release = await loadFirstReleaseOfGroup(rgId);
-              if (release?.id) await goByMbidWrapped(release.id);
+              const releases = await loadReleaseVersions(rgId);
+              const sorted = [...releases].sort((a, b) =>
+                String(a.date || "9999").localeCompare(String(b.date || "9999"))
+              );
+              const release = sorted.find((item) => item.id === preferredReleaseId) || sorted[0];
+              if (!release?.id) return;
+              await goByMbidWrapped(release.id);
+              document.querySelector('.tab[data-view="versions"]')?.click();
             } catch (err) {
               console.warn("Could not navigate to release group:", err);
             }

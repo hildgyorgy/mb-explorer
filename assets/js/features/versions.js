@@ -6,7 +6,7 @@
 import { STATE } from "../core/state.js";
 import { escHtml } from "../core/util.js";
 import { getActiveLibrarySource, onLibrarySourceChange } from "../core/librarySource.js";
-import { fetchJSON } from "../services/api.js";
+import { fetchJSON, loadReleaseVersions } from "../services/api.js";
 import { isLocalReleasePlayable } from "../services/localLibrary.js";
 import {
   getNavidromeAlbum,
@@ -69,15 +69,6 @@ function formatMedia(media) {
   return Array.from(counts.entries())
     .map(([fmt, n]) => (n > 1 ? `${n}× ${fmt}` : fmt))
     .join(" + ");
-}
-
-// Fetch all releases in a release group with media info
-async function loadReleaseVersions(rgId) {
-  const url =
-    `https://musicbrainz.org/ws/2/release` +
-    `?release-group=${rgId}&fmt=json&inc=labels+media&limit=100`;
-  const data = await fetchJSON(url);
-  return data?.releases || [];
 }
 
 // Fetch front cover thumb for one release (best effort)

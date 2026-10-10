@@ -69,7 +69,7 @@ function remeasureWrap(detailsRow) {
  *
  * @param {HTMLElement} outEl       - root container (the #out element)
  * @param {Array}       flatTracks  - flat track list built in renderReleasePage
- * @param {Function}    onLoadRelease - called with rgId when artist panel discography is clicked
+ * @param {Function}    onLoadRelease - called with release-group and preferred release IDs
  */
 export function bindTrackToggles(outEl, flatTracks, onLoadRelease) {
   const trackTable = $(".tracks table", outEl);
@@ -97,10 +97,10 @@ export function bindTrackToggles(outEl, flatTracks, onLoadRelease) {
     const inner = $(".details-inner", detailsRow);
     if (!inner) return;
 
-    await openArtistPanel(artistId, inner, async (rgId) => {
+    await openArtistPanel(artistId, inner, async (rgId, preferredReleaseId = "") => {
       if (typeof onLoadRelease === "function") {
         closeArtistPanel();
-        await onLoadRelease(rgId);
+        await onLoadRelease(rgId, preferredReleaseId);
       }
     });
 

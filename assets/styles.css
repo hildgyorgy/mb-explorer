@@ -2667,6 +2667,27 @@ align-items: center;
   white-space: nowrap;
 }
 
+.ap-disco-playable {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  align-self: center;
+  border-radius: 50%;
+  color: var(--bg);
+  background: var(--text);
+  box-shadow: 0 3px 9px rgba(0, 0, 0, .22);
+  pointer-events: none;
+}
+
+.ap-disco-playable svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+  fill: currentColor;
+}
+
 .ap-disco-type {
   font-size: 11px;
   flex-shrink: 0;

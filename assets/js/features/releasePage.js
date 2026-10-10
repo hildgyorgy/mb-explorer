@@ -113,7 +113,7 @@ function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverIma
  *
  * @param {HTMLElement} out
  * @param {{rel:Object, cover:string|null, covers:Array}} data
- * @param {(rgId:string)=>Promise<void>} [onLoadRelease] - called when artist panel discography item is clicked
+ * @param {(rgId:string, preferredReleaseId:string)=>Promise<void>} [onLoadRelease] - opens an artist discography item in Versions
  */
 export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelease, onNavigateToRelease) {
   const title = rel.title || "(untitled)";

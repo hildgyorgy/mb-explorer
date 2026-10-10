@@ -260,6 +260,30 @@ export async function loadArtistReleaseGroups(artistId) {
   return releaseGroupCache.get(artistId);
 }
 
+const artistReleaseCache = new Map();
+export async function loadArtistReleases(artistId) {
+  if (!artistId) return [];
+  if (artistReleaseCache.has(artistId)) return artistReleaseCache.get(artistId);
+
+  let allReleases = [];
+  let offset = 0;
+  const pageSize = 100;
+
+  while (allReleases.length < 1000) {
+    const data = await fetchJSON(
+      `${MB_API}/release?artist=${artistId}` +
+      `&fmt=json&inc=release-groups&limit=${pageSize}&offset=${offset}`
+    );
+    const page = data?.releases || [];
+    allReleases = allReleases.concat(page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  artistReleaseCache.set(artistId, allReleases);
+  return artistReleaseCache.get(artistId);
+}
+
 // ------------------------------------------------------------
 // Wikipedia (via Wikidata)
 // ------------------------------------------------------------
@@ -296,10 +320,14 @@ export async function fetchWikipediaSummary(wikidataUrl) {
   return result;
 }
 
-export async function loadFirstReleaseOfGroup(rgId) {
-  if (!rgId) return null;
+const releaseVersionsCache = new Map();
+export async function loadReleaseVersions(rgId) {
+  if (!rgId) return [];
+  if (releaseVersionsCache.has(rgId)) return releaseVersionsCache.get(rgId);
   const data = await fetchJSON(
-    `${MB_API}/release?release-group=${rgId}&fmt=json&limit=1`
+    `${MB_API}/release?release-group=${rgId}&fmt=json&inc=labels+media&limit=100`
   );
-  return data?.releases?.[0] || null;
+  const releases = data?.releases || [];
+  releaseVersionsCache.set(rgId, releases);
+  return releaseVersionsCache.get(rgId);
 }

@@ -1,12 +1,27 @@
 // features/artistPanel.js
 // Inline artist panel — opens between track row and credits when an artist name is clicked.
 
-import { loadArtist, loadArtistReleaseGroups, fetchWikipediaSummary } from "../services/api.js";
+import {
+  fetchWikipediaSummary,
+  loadArtist,
+  loadArtistReleaseGroups,
+  loadArtistReleases,
+} from "../services/api.js";
 import { escHtml, escAttr } from "../core/util.js";
+import { getActiveLibrarySource, onLibrarySourceChange } from "../core/librarySource.js";
+import { isLocalReleasePlayable } from "../services/localLibrary.js";
+import {
+  getNavidromeAlbum,
+  isNavidromeConnected,
+  isNavidromeReleasePlayable,
+  prepareNavidromeRelease,
+} from "../services/navidrome.js";
 
 let currentArtistId = null;
 let currentAnchorEl = null;
 let outsideClickHandler = null;
+let currentDiscographyReleases = [];
+let availabilityRefreshBound = false;
 
 // ------------------------------------------------------------
 // Public API
@@ -15,7 +30,7 @@ let outsideClickHandler = null;
 /**
  * @param {string} artistId - MusicBrainz artist MBID
  * @param {HTMLElement} anchorEl - the .details-inner element to inject into
- * @param {(mbid: string) => void} onLoadRelease - callback when user picks a release group
+ * @param {(groupMbid: string, releaseMbid: string) => void} onLoadRelease - callback when user picks a release group
  */
 export async function openArtistPanel(artistId, anchorEl, onLoadRelease) {
   if (!artistId || !anchorEl) return;
@@ -26,6 +41,8 @@ export async function openArtistPanel(artistId, anchorEl, onLoadRelease) {
 
   currentArtistId = artistId;
   currentAnchorEl = anchorEl;
+  currentDiscographyReleases = [];
+  bindAvailabilityRefreshOnce();
 
   const panel = createPanelShell();
   anchorEl.insertBefore(panel, anchorEl.firstChild);
@@ -66,6 +83,7 @@ export function closeArtistPanel() {
 
   currentArtistId = null;
   currentAnchorEl = null;
+  currentDiscographyReleases = [];
 }
 
 // ------------------------------------------------------------
@@ -98,7 +116,7 @@ function renderPanelContent(panel, artist, wiki, releaseGroups, onLoadRelease) {
   const years = buildLifeSpanYears(artist);
   const mbUrl = `https://musicbrainz.org/artist/${artist?.id || ""}`;
   const wikiHtml = buildWikiHtml(wiki);
-  const discoHtml = buildDiscographyHtml(releaseGroups, onLoadRelease);
+  const discoHtml = buildDiscographyHtml(releaseGroups);
 
   panel.querySelector(".ap-header").innerHTML = `
     <span class="ap-name">
@@ -116,6 +134,15 @@ function renderPanelContent(panel, artist, wiki, releaseGroups, onLoadRelease) {
     ${wikiHtml}
     ${discoHtml}
   `;
+
+  bindDiscographyRows(panel, onLoadRelease);
+  loadArtistReleases(artist?.id).then((releases) => {
+    if (!panel.isConnected || currentArtistId !== artist?.id) return;
+    currentDiscographyReleases = releases;
+    refreshDiscographyAvailability(panel);
+  }).catch((error) => {
+    console.warn("Could not load release versions for the artist discography:", error);
+  });
 }
 
 // ------------------------------------------------------------
@@ -164,7 +191,7 @@ function buildWikiHtml(wiki) {
 // Discography block
 // ------------------------------------------------------------
 
-function buildDiscographyHtml(releaseGroups, onLoadRelease) {
+function buildDiscographyHtml(releaseGroups) {
   if (!releaseGroups?.length) return "";
 
   const groups = groupReleaseGroups(releaseGroups);
@@ -176,25 +203,8 @@ function buildDiscographyHtml(releaseGroups, onLoadRelease) {
 
   if (!content) return "";
 
-  const sectionId = `ap-disco-${Date.now()}`;
-
-  setTimeout(() => {
-    const section = document.getElementById(sectionId);
-    if (!section || typeof onLoadRelease !== "function") return;
-
-    section.addEventListener("click", async (e) => {
-      const row = e.target.closest(".ap-disco-row");
-      if (!row) return;
-
-      const rgId = row.dataset.rgId;
-      if (!rgId) return;
-
-      await onLoadRelease(rgId);
-    });
-  }, 0);
-
   return `
-    <div class="ap-section" id="${sectionId}">
+    <div class="ap-section ap-discography">
       <div class="ap-section-label">DISCOGRAPHY</div>
       <div class="ap-disco-scroll">
         ${content}
@@ -260,8 +270,83 @@ function renderDiscographyRow(rg) {
     <div class="ap-disco-row" data-rg-id="${rgId}">
       <span class="ap-disco-year muted">${escHtml(year)}</span>
       <span class="ap-disco-title">${title}</span>
+      <span class="ap-disco-playable" role="img" title="A version is playable from your library" aria-label="A version is playable from your library" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+      </span>
     </div>
   `;
+}
+
+function bindDiscographyRows(panel, onLoadRelease) {
+  const section = panel.querySelector(".ap-discography");
+  if (!section || typeof onLoadRelease !== "function") return;
+  section.addEventListener("click", async (event) => {
+    const row = event.target.closest(".ap-disco-row");
+    if (!row?.dataset.rgId) return;
+    await onLoadRelease(row.dataset.rgId, row.dataset.releaseId || "");
+  });
+}
+
+function releaseGroupId(release) {
+  return String(release?.["release-group"]?.id || "");
+}
+
+function sortReleasesByDate(releases) {
+  return [...releases].sort((a, b) =>
+    String(a?.date || "9999").localeCompare(String(b?.date || "9999"))
+  );
+}
+
+function isReleasePlayable(releaseId) {
+  return getActiveLibrarySource() === "navidrome"
+    ? isNavidromeReleasePlayable(releaseId)
+    : isLocalReleasePlayable(releaseId);
+}
+
+function applyDiscographyAvailability(panel = document.querySelector(".artist-panel")) {
+  if (!panel) return;
+  const releasesByGroup = new Map();
+  currentDiscographyReleases.forEach((release) => {
+    const rgId = releaseGroupId(release);
+    if (!rgId) return;
+    if (!releasesByGroup.has(rgId)) releasesByGroup.set(rgId, []);
+    releasesByGroup.get(rgId).push(release);
+  });
+
+  panel.querySelectorAll(".ap-disco-row[data-rg-id]").forEach((row) => {
+    const releases = sortReleasesByDate(releasesByGroup.get(row.dataset.rgId) || []);
+    const playableRelease = releases.find((release) => isReleasePlayable(release.id));
+    const preferredRelease = playableRelease || releases[0];
+    if (preferredRelease?.id) row.dataset.releaseId = preferredRelease.id;
+    else delete row.dataset.releaseId;
+    const marker = row.querySelector(".ap-disco-playable");
+    if (marker) marker.hidden = !playableRelease;
+  });
+}
+
+async function refreshDiscographyAvailability(panel = document.querySelector(".artist-panel")) {
+  applyDiscographyAvailability(panel);
+  if (!panel || getActiveLibrarySource() !== "navidrome" || !isNavidromeConnected()) return;
+
+  const releaseIds = currentDiscographyReleases
+    .map((release) => release.id)
+    .filter((releaseId) => {
+      const album = getNavidromeAlbum(releaseId);
+      return album && !album.detailsLoaded;
+    });
+  if (!releaseIds.length) return;
+
+  await Promise.allSettled(releaseIds.map((releaseId) => prepareNavidromeRelease(releaseId)));
+  if (panel.isConnected && getActiveLibrarySource() === "navidrome") {
+    applyDiscographyAvailability(panel);
+  }
+}
+
+function bindAvailabilityRefreshOnce() {
+  if (availabilityRefreshBound) return;
+  availabilityRefreshBound = true;
+  onLibrarySourceChange(() => refreshDiscographyAvailability());
+  window.addEventListener("music-library-state-change", () => refreshDiscographyAvailability());
 }
 
 // ------------------------------------------------------------
