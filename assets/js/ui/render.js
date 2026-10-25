@@ -88,6 +88,7 @@ export function renderTracksView(mediaWithTracks, releaseLevelCreditsHtml = "", 
 
   return `
     <section class="view" data-view="tracks">
+      <div class="workspace-section-label">Tracklist</div>
       <div class="tracks">
         <table>
           <tbody>
@@ -278,6 +279,7 @@ function renderRow(row) {
 export function renderVersionsViewShell() {
   return `
     <section class="view" data-view="versions" hidden>
+      <div class="workspace-section-label">Versions</div>
       <div class="muted">Loading…</div>
     </section>
   `;

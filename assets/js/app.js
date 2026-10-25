@@ -15,6 +15,8 @@ import { bindLocalLibraryPicker } from "./services/localLibrary.js";
 import { leaveTrackPlaybackView } from "./features/player.js";
 import { bindNavidromePicker } from "./services/navidrome.js";
 import { bindPlaybackSetup } from "./ui/playbackSetup.js";
+import { applyReleaseLayout, bindReleaseLayoutControls } from "./ui/releaseLayout.js";
+import { layoutSync } from "./ui/layout.js";
 
 // ------------------------------
 // Loading / navigation
@@ -68,6 +70,7 @@ function bindAnimatedDialogCloseButtons(root = document) {
 export const App = Object.freeze({
   init() {
     applyTheme(getPreferredTheme());
+    applyReleaseLayout();
     bindThemeToggleOnce(document);
     bindAnimatedDialogCloseButtons(document);
 
@@ -77,6 +80,7 @@ export const App = Object.freeze({
       bindLocalLibraryPicker(document);
       bindNavidromePicker(document);
       bindPlaybackSetup(document);
+      bindReleaseLayoutControls(document);
 
       const helpDialog = document.getElementById("searchHelpDialog");
       const helpOpen = document.getElementById("searchHelpOpen");
@@ -157,6 +161,7 @@ homeLink?.addEventListener("click", () => {
   if (out) {
     out.innerHTML = emptyStateHtml;
     bindHomeActions();
+    layoutSync(out);
   }
 
   if (omni) {

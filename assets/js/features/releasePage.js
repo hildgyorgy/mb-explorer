@@ -20,6 +20,7 @@ import { bindTabsOnce, setActiveView } from "../ui/tabs.js";
 import { buildVersionsView } from "./versions.js";
 import { bindTrackToggles } from "./tracks.js";
 import { bindComposerHeadersOnce } from "../ui/composerHeaders.js";
+import { getReleaseLayout } from "../ui/releaseLayout.js";
 import { getLocalAlbum, getLocalTrack } from "../services/localLibrary.js";
 import { bindTrackPlayback } from "./player.js";
 import { getActiveLibrarySource } from "../core/librarySource.js";
@@ -80,15 +81,37 @@ function pickStreamingLinksFromRelease(rel) {
 // UI hydration
 // ------------------------------------------------------------
 
+let layoutChangeBound = false;
+let currentVersionsNavigate = null;
+
+async function ensureVersionsBuilt(onNavigateToRelease = currentVersionsNavigate) {
+  if (STATE.views.versionsBuilt) return;
+  setViewsState({ versionsBuilt: true });
+  await buildVersionsView(onNavigateToRelease);
+}
+
+function bindReleaseLayoutChangeOnce() {
+  if (layoutChangeBound) return;
+  layoutChangeBound = true;
+  window.addEventListener("release-layout-change", async (event) => {
+    const out = document.getElementById("out");
+    if (!out?.querySelector(".release-page")) return;
+
+    if (event.detail?.layout === "desktop") await ensureVersionsBuilt();
+    else setActiveView("tracks");
+
+    layoutSync(out);
+  });
+}
+
 function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverImages) {
   bindThemeToggleOnce(document);
+  currentVersionsNavigate = onNavigateToRelease;
+  bindReleaseLayoutChangeOnce();
 
   bindTabsOnce({
     onViewActivated: async (view) => {
-      if (view === "versions" && !STATE.views.versionsBuilt) {
-        setViewsState({ versionsBuilt: true });
-        await buildVersionsView(onNavigateToRelease);
-      }
+      if (view === "versions") await ensureVersionsBuilt(onNavigateToRelease);
     },
   });
 
@@ -102,6 +125,8 @@ function hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverIma
 
   bindCoverGalleryOnce(out);
   bindCoverSizerOnce();
+
+  if (getReleaseLayout() === "desktop") void ensureVersionsBuilt(onNavigateToRelease);
 }
 
 // ------------------------------------------------------------
@@ -212,8 +237,9 @@ export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelea
     localTrackCount,
   });
 
-  out.innerHTML = `
-    ${renderHeader({
+  out.innerHTML = `<div class="release-page">
+    <div class="release-left">
+      ${renderHeader({
       title,
       cover,
       mbLink,
@@ -229,16 +255,17 @@ export async function renderReleasePage(out, { rel, cover, covers }, onLoadRelea
       localRelease: STATE.views.localRelease,
       localTrackCount: STATE.views.localTrackCount,
       totalTrackCount: flatTracks.length,
-    })}
-    <div class="views">
-  ${renderTracksView(
-    mediaWithTracks,
-    renderReleaseLevelCredits(rel),
-    renderAnnotation(annotation)
-  )}
+      })}
       ${renderVersionsViewShell()}
     </div>
-  `;
+    <div class="views">
+      ${renderTracksView(
+        mediaWithTracks,
+        renderReleaseLevelCredits(rel),
+        renderAnnotation(annotation)
+      )}
+    </div>
+  </div>`;
 
   hydrateUI(out, flatTracks, onLoadRelease, onNavigateToRelease, coverImages);
 

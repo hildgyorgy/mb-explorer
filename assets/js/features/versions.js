@@ -144,17 +144,17 @@ export async function buildVersionsView(onNavigate) {
   bindAvailabilityRefreshOnce();
 
   if (!rgId) {
-    view.innerHTML = `<div class="muted ver-empty">No release group data available.</div>`;
+    view.innerHTML = `<div class="workspace-section-label">Versions</div><div class="muted ver-empty">No release group data available.</div>`;
     return;
   }
 
-  view.innerHTML = `<div class="muted ver-loading">Loading versions…</div>`;
+  view.innerHTML = `<div class="workspace-section-label">Versions</div><div class="muted ver-loading">Loading versions…</div>`;
 
   let releases;
   try {
     releases = await loadReleaseVersions(rgId);
   } catch {
-    view.innerHTML = `<div class="muted ver-empty">Could not load versions.</div>`;
+    view.innerHTML = `<div class="workspace-section-label">Versions</div><div class="muted ver-empty">Could not load versions.</div>`;
     return;
   }
 
@@ -172,7 +172,7 @@ export async function buildVersionsView(onNavigate) {
         renderVersionCard(rel, thumbMap.get(rel.id) || null, isCurrent)
       )
       .join("");
-    view.innerHTML = `<div class="ver-list">${html}</div>`;
+    view.innerHTML = `<div class="workspace-section-label">Versions</div><div class="ver-list">${html}</div>`;
     refreshVersionAvailability(view);
 
     // Bind click handlers
