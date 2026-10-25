@@ -2,7 +2,58 @@ const SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/";
 
 let renderer = null;
 let discoveredRenderers = [];
-const BRIDGE_URL = "http://localhost:9181";
+const DEFAULT_BRIDGE_URL = "http://127.0.0.1:9181";
+const BRIDGE_URL_KEY = "musicbrainz-explorer.upnp.bridge-url";
+const RENDERER_KEY = "musicbrainz-explorer.upnp.renderer";
+
+function storageGet(key) {
+  try { return localStorage.getItem(key); } catch (error) { return null; }
+}
+
+function storageSet(key, value) {
+  try { localStorage.setItem(key, value); } catch (error) { /* storage may be unavailable */ }
+}
+
+function storageRemove(key) {
+  try { localStorage.removeItem(key); } catch (error) { /* storage may be unavailable */ }
+}
+
+export function normalizeBridgeUrl(value) {
+  const text = String(value || "").trim() || DEFAULT_BRIDGE_URL;
+  const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(text) ? text : `https://${text}`);
+  if (!["http:", "https:"].includes(url.protocol) || !url.hostname || url.username || url.password || url.search || url.hash) {
+    throw new Error("Enter a complete HTTP(S) bridge address without credentials or query parameters.");
+  }
+  const loopback = ["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase());
+  if (url.protocol === "http:" && !loopback && globalThis.location?.protocol === "https:") {
+    throw new Error("This HTTPS page needs an HTTPS bridge address. Use Tailscale Serve for an Umbrel bridge.");
+  }
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  return url.toString().replace(/\/$/, "");
+}
+
+export function getBridgeUrl() {
+  try { return normalizeBridgeUrl(storageGet(BRIDGE_URL_KEY) || DEFAULT_BRIDGE_URL); }
+  catch (error) { return DEFAULT_BRIDGE_URL; }
+}
+
+export function setBridgeUrl(value) {
+  const next = normalizeBridgeUrl(value);
+  if (next !== getBridgeUrl()) {
+    renderer = null;
+    storageRemove(RENDERER_KEY);
+    window.dispatchEvent(new CustomEvent("playback-output-change"));
+  }
+  storageSet(BRIDGE_URL_KEY, next);
+  return next;
+}
+
+export function getSavedRendererPreference() {
+  try {
+    const saved = JSON.parse(storageGet(RENDERER_KEY) || "null");
+    return saved?.id && saved?.bridgeUrl ? saved : null;
+  } catch (error) { return null; }
+}
 
 function localName(tag) {
   return String(tag || "").split("}").pop();
@@ -34,13 +85,14 @@ export async function loadRendererDescription(descriptionUrl) {
   return renderer;
 }
 
-export async function loadBridgeRenderer(bridgeUrl = BRIDGE_URL) {
+export async function loadBridgeRenderer(bridgeUrl = getBridgeUrl()) {
   const renderers = await discoverBridgeRenderers(bridgeUrl);
   return selectBridgeRenderer(renderers[0], bridgeUrl);
 }
 
-export async function discoverBridgeRenderers(bridgeUrl = BRIDGE_URL) {
-  const response = await fetch(`${bridgeUrl.replace(/\/$/, "")}/renderers`, {
+export async function discoverBridgeRenderers(bridgeUrl = getBridgeUrl()) {
+  const normalized = normalizeBridgeUrl(bridgeUrl);
+  const response = await fetch(`${normalized}/renderers`, {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) throw new Error(`UPnP bridge returned HTTP ${response.status}.`);
@@ -50,11 +102,29 @@ export async function discoverBridgeRenderers(bridgeUrl = BRIDGE_URL) {
   return discoveredRenderers;
 }
 
-export function selectBridgeRenderer(found, bridgeUrl = BRIDGE_URL) {
+export function selectBridgeRenderer(found, bridgeUrl = getBridgeUrl(), remember = true) {
   if (!found?.id) throw new Error("The selected renderer has no device identifier.");
-  renderer = { ...found, mode: "bridge", bridgeUrl: bridgeUrl.replace(/\/$/, "") };
+  const normalized = normalizeBridgeUrl(bridgeUrl);
+  renderer = { ...found, mode: "bridge", bridgeUrl: normalized };
+  if (remember) {
+    storageSet(BRIDGE_URL_KEY, normalized);
+    storageSet(RENDERER_KEY, JSON.stringify({
+      bridgeUrl: normalized,
+      id: String(found.id),
+      friendlyName: found.friendlyName || found.name || "UPnP renderer",
+    }));
+  }
   window.dispatchEvent(new CustomEvent("playback-output-change"));
   return renderer;
+}
+
+export async function restoreSavedRenderer() {
+  const saved = getSavedRendererPreference();
+  if (!saved) return null;
+  const renderers = await discoverBridgeRenderers(saved.bridgeUrl);
+  const found = renderers.find((candidate) => String(candidate.id) === String(saved.id));
+  if (!found) throw new Error(`${saved.friendlyName || "The saved renderer"} was not found.`);
+  return selectBridgeRenderer(found, saved.bridgeUrl, false);
 }
 
 function value(document, name) {
@@ -140,5 +210,6 @@ export function getRenderer() { return renderer; }
 
 export function disconnectRenderer() {
   renderer = null;
+  storageRemove(RENDERER_KEY);
   window.dispatchEvent(new CustomEvent("playback-output-change"));
 }

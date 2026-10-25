@@ -36,8 +36,10 @@ function remoteItem(entry) {
   const track = entry.localTrack?.track || {};
   const album = entry.localTrack?.album || {};
   const uri = entry.localTrack.playbackUrl;
+  const rendererUri = entry.localTrack.rendererPlaybackUrl || "";
   return {
     uri,
+    ...(rendererUri ? { rendererUri } : {}),
     metadata: didlMetadata({
       id: track.providerItemId || track.track_mbid || track.recording_mbid || uri,
       title: entry.title || track.title || "Navidrome track",

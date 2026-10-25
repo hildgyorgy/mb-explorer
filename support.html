@@ -368,7 +368,8 @@
       <ol>
         <li>Select the pulsing logo, open <strong>Source</strong>, then choose <strong>Navidrome</strong>.</li>
         <li>Select <strong>Connect or configure</strong>.</li>
-        <li>Enter a display name, the server URL, your username and password.</li>
+        <li>Enter a display name, the remote/Tailscale HTTPS URL, your username and password.</li>
+        <li>Optionally enter the server's home-network URL for direct UPnP playback.</li>
         <li>Select <strong>Connect</strong> and wait while the Explorer reads the album catalogue.</li>
       </ol>
       <p>
@@ -433,8 +434,9 @@
       <details>
         <summary>Navidrome does not connect</summary>
         <p>
-          Check the server URL and credentials. A remote URL must use HTTPS, and the server must identify itself
-          as Navidrome with OpenSubsonic support. Local-network HTTP addresses are allowed.
+          Check the remote/Tailscale URL and credentials. The browser-facing URL must use HTTPS, and the server
+          must identify itself as Navidrome with OpenSubsonic support. The optional UPnP home-network URL may use
+          HTTP when it has a local hostname or private IP address.
         </p>
       </details>
 
@@ -482,6 +484,12 @@
         UPnP network-renderer output is under development and is planned for an upcoming release. System audio
         is the supported playback output in version 1.5.0.
       </div>
+      <p>
+        The planned bridge can run either as a native macOS helper at <code>http://127.0.0.1:9181</code> or as
+        an always-on Docker service on an Umbrel/Raspberry Pi. An Umbrel bridge uses a private Tailscale Serve
+        HTTPS address for browser control; the renderer still receives the ordinary local Navidrome URL and
+        never needs Tailscale.
+      </p>
     </section>
 
     <section aria-labelledby="privacy">
@@ -491,7 +499,8 @@
         <li>Your music files and <code>library.json</code> are not uploaded by the app.</li>
         <li>Browser indexing and playback happen locally on your device.</li>
         <li>A supported browser may retain the selected local-folder handle; it controls whether access must be approved again.</li>
-        <li>Navidrome requests go directly from the browser to the server you configure.</li>
+        <li>Navidrome catalogue and browser-playback requests go directly to the remote/Tailscale URL you configure.</li>
+        <li>When configured, the separate home-network URL is used only for streams handed to a UPnP renderer.</li>
         <li>The Navidrome profile and a reusable salted login token are stored locally; the original password is not stored.</li>
         <li>Music metadata and cover art are requested from MusicBrainz and the Cover Art Archive.</li>
       </ul>

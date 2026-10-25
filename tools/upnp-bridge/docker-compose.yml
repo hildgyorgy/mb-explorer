@@ -1,8 +1,13 @@
 services:
-  musicards-upnp-bridge:
+  musicbrainz-explorer-bridge:
     build: .
-    container_name: musicards-upnp-bridge
+    container_name: musicbrainz-explorer-bridge
     network_mode: host
     restart: unless-stopped
     environment:
       MUSICARDS_BRIDGE_PORT: "9181"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:9181/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

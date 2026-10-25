@@ -1,2 +1,5 @@
 .DS_Store
 __MACOSX/
+__pycache__/
+tools/upnp-bridge/.build/
+tools/upnp-bridge/dist/

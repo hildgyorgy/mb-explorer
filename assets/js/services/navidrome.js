@@ -62,6 +62,24 @@ function normalizeBaseUrl(value) {
   return url;
 }
 
+function normalizeHomeBaseUrl(value) {
+  let text = String(value || "").trim();
+  if (!text) return null;
+  if (!/^[a-z][a-z\d+.-]*:\/\//i.test(text)) text = `http://${text}`;
+  const url = new URL(text);
+  const host = url.hostname.toLowerCase();
+  const localHost = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local") ||
+    !host.includes(".") || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  if (!(["http:", "https:"].includes(url.protocol)) || (url.protocol === "http:" && !localHost)) {
+    throw new Error("An HTTP home-network address must use a local hostname or private IP address.");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error("The home-network URL must not contain credentials or query parameters.");
+  }
+  url.pathname = url.pathname.replace(/\/+$/, "");
+  return url;
+}
+
 // OpenSubsonic authentication uses md5(password + salt). Web Crypto does not
 // expose MD5, so this small implementation keeps the app dependency-free.
 function md5(value) {
@@ -104,8 +122,8 @@ function authParameters(format = "json") {
   };
 }
 
-function endpoint(name) {
-  const base = profile.baseUrl.toString().replace(/\/+$/, "");
+function endpoint(name, baseUrl = profile.baseUrl) {
+  const base = baseUrl.toString().replace(/\/+$/, "");
   return `${base}/rest/${name}.view`;
 }
 
@@ -155,6 +173,7 @@ function mapAlbum(album, songs = null) {
       duration: song.duration,
       contentType: song.contentType,
       playbackUrl: streamUrl(song.id),
+      rendererPlaybackUrl: rendererStreamUrl(song.id),
     })),
   };
 }
@@ -163,6 +182,12 @@ export function streamUrl(songId) {
   if (!profile || !authToken || !authSalt || !songId) return "";
   const params = new URLSearchParams({ ...authParameters("json"), id: songId, format: "raw", maxBitRate: "0" });
   return `${endpoint("stream")}?${params.toString()}`;
+}
+
+export function rendererStreamUrl(songId) {
+  if (!profile?.homeBaseUrl || !authToken || !authSalt || !songId) return "";
+  const params = new URLSearchParams({ ...authParameters("json"), id: songId, format: "raw", maxBitRate: "0" });
+  return `${endpoint("stream", profile.homeBaseUrl)}?${params.toString()}`;
 }
 
 export function getNavidromeAlbum(releaseMbid) {
@@ -181,7 +206,12 @@ export function getNavidromeTrack(releaseMbid, recordingMbid, mediumPosition, tr
   const matched = matchNavidromeTrack(candidates, mediumPosition, trackPosition, uniqueRecording);
   if (!matched) return null;
   const album = getNavidromeAlbum(releaseMbid);
-  return { album, track: matched, playbackUrl: matched.playbackUrl };
+  return {
+    album,
+    track: matched,
+    playbackUrl: matched.playbackUrl,
+    rendererPlaybackUrl: matched.rendererPlaybackUrl,
+  };
 }
 
 function normalizeText(value) {
@@ -219,14 +249,20 @@ export function getNavidromeSummary() {
     remembered: !!remembered,
     name: profile?.name || remembered?.name || "Navidrome",
     serverUrl: profile?.baseUrl?.toString() || remembered?.baseUrl || "",
+    homeServerUrl: profile?.homeBaseUrl?.toString() || remembered?.homeBaseUrl || "",
     username: profile?.username || remembered?.username || "",
     identifiedAlbumCount: catalog.length,
     totalAlbumCount: albumInventory.length,
   };
 }
 
-export async function connectNavidrome({ name, serverUrl, username, userPassword = "", savedToken = "", savedSalt = "" }) {
-  const nextProfile = { name: String(name || "").trim() || "Navidrome", baseUrl: normalizeBaseUrl(serverUrl), username: String(username || "").trim() };
+export async function connectNavidrome({ name, serverUrl, homeServerUrl = "", username, userPassword = "", savedToken = "", savedSalt = "" }) {
+  const nextProfile = {
+    name: String(name || "").trim() || "Navidrome",
+    baseUrl: normalizeBaseUrl(serverUrl),
+    homeBaseUrl: normalizeHomeBaseUrl(homeServerUrl),
+    username: String(username || "").trim(),
+  };
   if (!nextProfile.username) throw new Error("A Navidrome username is required.");
   const nextSalt = String(savedSalt || "") || randomSalt();
   const nextToken = String(savedToken || "") || (userPassword ? md5(String(userPassword) + nextSalt) : "");
@@ -265,6 +301,7 @@ export async function connectNavidrome({ name, serverUrl, username, userPassword
       localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify({
         name: nextProfile.name,
         baseUrl: nextProfile.baseUrl.toString(),
+        homeBaseUrl: nextProfile.homeBaseUrl?.toString() || "",
         username: nextProfile.username,
         token: authToken,
         salt: authSalt,
@@ -318,6 +355,7 @@ export function bindNavidromePicker(root = document) {
   if (saved) {
     form.elements.name.value = saved.name || "";
     form.elements.serverUrl.value = saved.baseUrl || "";
+    form.elements.homeServerUrl.value = saved.homeBaseUrl || "";
     form.elements.username.value = saved.username || "";
   }
   status.textContent = getNavidromeStatus();
@@ -364,6 +402,7 @@ export function bindNavidromePicker(root = document) {
       const result = await connectNavidrome({
         name: data.get("name"),
         serverUrl: data.get("serverUrl"),
+        homeServerUrl: data.get("homeServerUrl"),
         username: data.get("username"),
         userPassword: enteredPassword,
         savedToken: enteredPassword ? "" : saved?.token,
@@ -396,6 +435,7 @@ export function bindNavidromePicker(root = document) {
     connectNavidrome({
       name: saved.name,
       serverUrl: saved.baseUrl,
+      homeServerUrl: saved.homeBaseUrl || "",
       username: saved.username,
       savedToken: saved.token,
       savedSalt: saved.salt,

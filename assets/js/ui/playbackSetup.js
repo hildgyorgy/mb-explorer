@@ -8,8 +8,11 @@ import { getNavidromeSummary } from "../services/navidrome.js";
 import {
   discoverBridgeRenderers,
   disconnectRenderer,
+  getBridgeUrl,
   getRenderer,
+  getSavedRendererPreference,
   selectBridgeRenderer,
+  setBridgeUrl,
 } from "../services/upnpRenderer.js";
 
 function rendererName(renderer) {
@@ -54,14 +57,15 @@ export function refreshPlaybackSetup(root = document) {
   const local = getLocalLibrarySummary();
   const navidrome = getNavidromeSummary();
   const renderer = getRenderer();
+  const activeRenderer = source === "navidrome" ? renderer : null;
   const compatibility = root.getElementById("homeCompatibilityStatus");
   const compatibilityLabel = root.getElementById("homeCompatibilityLabel");
   const compatibilityState = compatibilitySummary(source, local, navidrome);
 
   setSelected(root.getElementById("homeSourceLocal"), source === "local");
   setSelected(root.getElementById("homeSourceNavidrome"), source === "navidrome");
-  setSelected(root.getElementById("homeOutputSystem"), !renderer);
-  setSelected(root.getElementById("homeOutputRenderer"), !!renderer);
+  setSelected(root.getElementById("homeOutputSystem"), !activeRenderer);
+  setSelected(root.getElementById("homeOutputRenderer"), !!activeRenderer);
   if (compatibility) compatibility.textContent = compatibilityState.value;
   if (compatibilityLabel) compatibilityLabel.textContent = compatibilityState.label;
 
@@ -70,7 +74,12 @@ export function refreshPlaybackSetup(root = document) {
   const rendererChoice = root.getElementById("homeOutputRenderer");
   if (localChoice) localChoice.title = source === "local" ? "Open local folder settings" : "Use the local music folder";
   if (navidromeChoice) navidromeChoice.title = source === "navidrome" ? "Open Navidrome settings" : "Use Navidrome";
-  if (rendererChoice) rendererChoice.title = renderer ? `Configure ${rendererName(renderer)}` : "Choose a UPnP renderer";
+  if (rendererChoice) {
+    rendererChoice.disabled = source !== "navidrome";
+    rendererChoice.title = source !== "navidrome"
+      ? "UPnP output requires the Navidrome source"
+      : renderer ? `Configure ${rendererName(renderer)}` : "Choose a UPnP renderer";
+  }
 
   const localReport = root.getElementById("showLocalInventory");
   const navidromeReport = root.getElementById("showNavidromeInventory");
@@ -78,7 +87,7 @@ export function refreshPlaybackSetup(root = document) {
   if (navidromeReport) navidromeReport.hidden = !navidrome.connected;
 
   root.querySelectorAll(".output-option[data-renderer-id]").forEach((button) => {
-    button.classList.toggle("is-selected", !!renderer && button.dataset.rendererId === String(renderer.id));
+    button.classList.toggle("is-selected", !!activeRenderer && button.dataset.rendererId === String(activeRenderer.id));
   });
 }
 
@@ -96,9 +105,63 @@ function bindPersistentSetup(root) {
   const discover = root.getElementById("discoverRenderers");
   const outputOptions = root.getElementById("outputOptions");
   const rendererStatus = root.getElementById("rendererStatus");
+  const bridgeUrlInput = root.getElementById("bridgeUrl");
+  let restoreTask = null;
+
+  const showRenderers = (renderers, bridgeUrl) => {
+    outputOptions?.querySelectorAll("[data-renderer-id]").forEach((button) => button.remove());
+    for (const found of renderers) {
+      const button = root.createElement("button");
+      button.type = "button";
+      button.className = "output-option";
+      button.dataset.rendererId = String(found.id);
+      const copy = root.createElement("span");
+      const name = root.createElement("strong");
+      const detail = root.createElement("small");
+      const check = root.createElement("span");
+      name.textContent = rendererName(found);
+      detail.textContent = found.modelName || found.manufacturer || "UPnP network renderer";
+      check.className = "output-check";
+      check.setAttribute("aria-hidden", "true");
+      check.textContent = "✓";
+      copy.append(name, detail);
+      button.append(copy, check);
+      button.addEventListener("click", () => {
+        selectBridgeRenderer(found, bridgeUrl);
+        if (rendererStatus) rendererStatus.textContent = `${rendererName(found)} selected.`;
+        outputDialog?.querySelector(".search-help-close")?.click();
+      });
+      outputOptions?.append(button);
+    }
+  };
+
+  const restoreOutput = () => {
+    if (restoreTask || getRenderer() || getActiveLibrarySource() !== "navidrome") return restoreTask;
+    const saved = getSavedRendererPreference();
+    if (!saved) return null;
+    if (bridgeUrlInput) bridgeUrlInput.value = saved.bridgeUrl;
+    restoreTask = (async () => {
+      try {
+        if (rendererStatus) rendererStatus.textContent = `Reconnecting to ${saved.friendlyName || "the saved renderer"}…`;
+        const renderers = await discoverBridgeRenderers(saved.bridgeUrl);
+        showRenderers(renderers, saved.bridgeUrl);
+        const found = renderers.find((candidate) => String(candidate.id) === String(saved.id));
+        if (!found) throw new Error(`${saved.friendlyName || "The saved renderer"} was not found.`);
+        selectBridgeRenderer(found, saved.bridgeUrl, false);
+        if (rendererStatus) rendererStatus.textContent = `${rendererName(found)} reconnected.`;
+      } catch (error) {
+        if (rendererStatus) rendererStatus.textContent = error?.message || "The saved renderer could not be restored.";
+      } finally {
+        restoreTask = null;
+        refreshPlaybackSetup(root);
+      }
+    })();
+    return restoreTask;
+  };
 
   bindDialogBackdrop(sourceDialog);
   bindDialogBackdrop(outputDialog);
+  if (bridgeUrlInput) bridgeUrlInput.value = getBridgeUrl();
 
   discover?.addEventListener("click", async () => {
     discover.disabled = true;
@@ -107,31 +170,10 @@ function bindPersistentSetup(root) {
       rendererStatus.textContent = "Looking for UPnP renderers through the local bridge…";
     }
     try {
-      const renderers = await discoverBridgeRenderers();
-      outputOptions?.querySelectorAll("[data-renderer-id]").forEach((button) => button.remove());
-      for (const found of renderers) {
-        const button = root.createElement("button");
-        button.type = "button";
-        button.className = "output-option";
-        button.dataset.rendererId = String(found.id);
-        const copy = root.createElement("span");
-        const name = root.createElement("strong");
-        const detail = root.createElement("small");
-        const check = root.createElement("span");
-        name.textContent = rendererName(found);
-        detail.textContent = found.modelName || found.manufacturer || "UPnP network renderer";
-        check.className = "output-check";
-        check.setAttribute("aria-hidden", "true");
-        check.textContent = "✓";
-        copy.append(name, detail);
-        button.append(copy, check);
-        button.addEventListener("click", () => {
-          selectBridgeRenderer(found);
-          if (rendererStatus) rendererStatus.textContent = `${rendererName(found)} selected.`;
-          outputDialog?.querySelector(".search-help-close")?.click();
-        });
-        outputOptions?.append(button);
-      }
+      const bridgeUrl = setBridgeUrl(bridgeUrlInput?.value || getBridgeUrl());
+      if (bridgeUrlInput) bridgeUrlInput.value = bridgeUrl;
+      const renderers = await discoverBridgeRenderers(bridgeUrl);
+      showRenderers(renderers, bridgeUrl);
       if (rendererStatus) rendererStatus.textContent = `${renderers.length.toLocaleString()} renderer${renderers.length === 1 ? "" : "s"} found.`;
     } catch (error) {
       if (rendererStatus) {
@@ -144,9 +186,13 @@ function bindPersistentSetup(root) {
     }
   });
 
-  onLibrarySourceChange(() => refreshPlaybackSetup(root));
+  onLibrarySourceChange(() => {
+    refreshPlaybackSetup(root);
+    restoreOutput();
+  });
   window.addEventListener("music-library-state-change", () => refreshPlaybackSetup(root));
   window.addEventListener("playback-output-change", () => refreshPlaybackSetup(root));
+  restoreOutput();
 }
 
 export function bindPlaybackSetup(root = document) {
@@ -187,6 +233,7 @@ export function bindPlaybackSetup(root = document) {
   if (rendererChoice?.dataset.bound !== "1") {
     rendererChoice.dataset.bound = "1";
     rendererChoice.addEventListener("click", () => {
+      if (getActiveLibrarySource() !== "navidrome") return;
       refreshPlaybackSetup(root);
       openSettings(outputDialog, rendererChoice);
     });
