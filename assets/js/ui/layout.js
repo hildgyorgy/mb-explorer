@@ -89,6 +89,18 @@ function syncDesktopPlayerColumn(root = document) {
   page.style.setProperty("--mini-player-shift", "0px");
 }
 
+function clearDesktopSectionHeaderOffset(root = document) {
+  $(".release-left", root)?.style.removeProperty("--release-header-sticky-height");
+}
+
+function syncDesktopSectionHeaderOffset(root = document) {
+  const left = $(".release-left", root);
+  const header = $(".release-left > .header-hero", root);
+  if (!left || !header) return;
+  const height = Math.ceil(header.getBoundingClientRect().height);
+  if (height > 0) left.style.setProperty("--release-header-sticky-height", `${height}px`);
+}
+
 export function clearInlineLayout(root = document) {
   const cover = $(".cover", root);
   const box = $(".cover-box", root);
@@ -108,6 +120,7 @@ export function clearInlineLayout(root = document) {
 
 export function layoutSync(root = document) {
   clearDesktopPlayerColumn();
+  clearDesktopSectionHeaderOffset(root);
   const desktopWorkspace = document.documentElement.dataset.releaseLayout === "desktop" &&
     window.matchMedia("(min-width: 1200px)").matches;
   if (isMobileLayout() || desktopWorkspace) {
@@ -115,6 +128,7 @@ export function layoutSync(root = document) {
     if (desktopWorkspace) {
       syncBrandToCover(root);
       syncDesktopPlayerColumn(root);
+      syncDesktopSectionHeaderOffset(root);
     }
     return;
   }
