@@ -446,7 +446,8 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"MusicBrainz Explorer UPnP bridge listening on http://{HOST}:{PORT}",
+    local_host = "localhost" if HOST in {"0.0.0.0", "::"} else HOST
+    print(f"MusicBrainz Explorer UPnP bridge running. Local address: http://{local_host}:{PORT}",
           flush=True)
     try:
         server.serve_forever()

@@ -39,6 +39,10 @@ and stapled before release.
 python3 musicards_upnp_bridge.py
 ```
 
+The startup message shows `http://localhost:9181` for the default bind address.
+`0.0.0.0` means the bridge listens on all network interfaces; it is not a URL
+to enter in a browser or the Explorer's Bridge URL field.
+
 Environment variables:
 
 - `MUSICARDS_BRIDGE_HOST` — listener address, default `0.0.0.0` because a
