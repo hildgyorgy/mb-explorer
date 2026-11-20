@@ -214,6 +214,14 @@ export async function getRendererState() {
   return response.json();
 }
 
+export async function stopBridgeRenderer(target) {
+  if (target?.mode !== "bridge") return;
+  const response = await fetch(`${target.bridgeUrl}/renderers/${encodeURIComponent(target.id)}/stop`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+  if (!response.ok) throw new Error(`Stop returned HTTP ${response.status}.`);
+}
+
 export function getRenderer() { return renderer; }
 
 export function disconnectRenderer() {

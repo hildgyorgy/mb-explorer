@@ -29,7 +29,7 @@ RENDERER_IP = os.environ.get("MUSICARDS_RENDERER_IP", "").strip()
 SITE_ROOT = (Path(os.environ["MUSICARDS_SITE_ROOT"]).resolve()
              if os.environ.get("MUSICARDS_SITE_ROOT") else
              (Path(sys.executable).resolve().parent.parent / "site"
-              if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]))
+              if getattr(sys, "frozen", False) else Path(__file__).resolve().parent.parent.parent))
 SITE_TOP_LEVEL = {"index.html", "support.html", "site.webmanifest", "icon.png",
                   "favicon.ico", "favicon-16x16.png", "favicon-32x32.png",
                   "apple-touch-icon.png", "android-chrome-192x192.png",
@@ -41,11 +41,20 @@ ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS | {
     for origin in os.environ.get("MUSICARDS_ALLOWED_ORIGINS", "").split(",")
     if origin.strip()
 }
+ALLOWED_HOSTS = {host.strip().lower() for host in
+                 os.environ.get("MUSICARDS_ALLOWED_HOSTS", "").split(",")
+                 if host.strip()}
 
 
 def xml_value(node, name):
     return next((x.text or "" for x in node.iter()
                  if x.tag.rsplit("}", 1)[-1] == name), "")
+
+
+def upnp_clock(value):
+    hours, remaining = divmod(max(0, int(value)), 3600)
+    minutes, seconds = divmod(remaining, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}"
 
 
 def private_lan_address(value):
@@ -235,6 +244,7 @@ def soap_text(renderer, action, arguments=(), names=()):
 class BridgeState:
     def __init__(self):
         self.lock = threading.Lock()
+        self.scan_lock = threading.Lock()
         self.renderers = {}
         self.queue = {}
         self.last_next = {}
@@ -244,22 +254,36 @@ class BridgeState:
         self.proxy_originals = {}
 
     def refresh(self):
-        with self.lock:
+        if not self.scan_lock.acquire(blocking=False):
+            with self.lock:
+                cached = list(self.renderers.values())
+            if cached:
+                return cached
+            with self.scan_lock:
+                with self.lock:
+                    return list(self.renderers.values())
+        try:
+            found = {}
             for item in discover():
                 try:
                     renderer = renderer_from_description(
                         item["location"], item.get("address", ""))
-                    self.renderers[renderer["id"]] = renderer
+                    found[renderer["id"]] = renderer
                 except Exception:
                     continue
-            return list(self.renderers.values())
+            with self.lock:
+                self.renderers.update(found)
+                return list(self.renderers.values())
+        finally:
+            self.scan_lock.release()
 
     def get(self, renderer_id):
         with self.lock:
             renderer = self.renderers.get(renderer_id)
         if not renderer:
             self.refresh()
-            renderer = self.renderers.get(renderer_id)
+            with self.lock:
+                renderer = self.renderers.get(renderer_id)
         if not renderer:
             raise KeyError("renderer not found")
         return renderer
@@ -342,6 +366,9 @@ def queue_watcher():
                 next_item = items[index + 1]
                 if STATE.last_next.get(renderer_id) == next_item.get("uri"):
                     continue
+                with STATE.lock:
+                    if STATE.queue.get(renderer_id) is not items:
+                        continue
                 soap_call(renderer, "SetNextAVTransportURI", [("InstanceID", 0),
                     ("NextURI", next_item["uri"]),
                     ("NextURIMetaData", next_item.get("metadata", ""))])
@@ -350,6 +377,9 @@ def queue_watcher():
                 if changed:
                     state = soap_text(renderer, "GetTransportInfo", [("InstanceID", 0)], ("CurrentTransportState",)).get("CurrentTransportState", "")
                     if state == "STOPPED":
+                        with STATE.lock:
+                            if STATE.queue.get(renderer_id) is not items:
+                                continue
                         soap_call(renderer, "Play", [("InstanceID", 0), ("Speed", 1)])
             except Exception:
                 continue
@@ -396,8 +426,24 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             return False
 
+    def host_allowed(self):
+        try:
+            host = urllib.parse.urlsplit("//" + self.headers.get("Host", "")).hostname
+        except ValueError:
+            return False
+        if not host:
+            return False
+        host = host.lower()
+        if host in {"localhost", "127.0.0.1", "::1"} | ALLOWED_HOSTS:
+            return True
+        # Tailscale Serve forwards the public HTTPS page's requests to this
+        # loopback listener. Its ts.net Host is safe only with an allowed Origin.
+        return (host.endswith(".ts.net") and
+                self.headers.get("Origin", "").strip().rstrip("/") in ALLOWED_ORIGINS)
+
     def allow_control_request(self):
-        return self.is_loopback_client() and self.allowed_origin() is not None
+        return (self.is_loopback_client() and self.host_allowed() and
+                self.allowed_origin() is not None)
 
     def send_cors_headers(self):
         origin = self.allowed_origin()
@@ -415,7 +461,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def serve_site(self, path, head_only=False):
-        if not self.is_loopback_client():
+        if not self.is_loopback_client() or not self.host_allowed():
             self.send_error(403, "Local website access only")
             return
         relative = urllib.parse.unquote(path).lstrip("/") or "index.html"
@@ -506,7 +552,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(403, {"error": "local control access denied"})
             if self.path == "/health":
                 return self.send_json(200, {"ok": True})
-            if self.path == "/renderers":
+            if path == "/renderers":
                 return self.send_json(200, {"renderers": STATE.refresh()})
             if len(parts) == 3 and parts[0] == "renderers" and parts[2] == "state":
                 renderer = STATE.get(urllib.parse.unquote(parts[1]))
@@ -574,8 +620,7 @@ class Handler(BaseHTTPRequestHandler):
                     ("NextURIMetaData", item.get("metadata", ""))])
                 return self.send_json(200, {"ok": True})
             if action == "seek":
-                seconds = max(0, int(body.get("seconds", 0)))
-                target = f"0:{seconds // 60:02d}:{seconds % 60:02d}"
+                target = upnp_clock(body.get("seconds", 0))
                 soap_call(renderer, "Seek", [("InstanceID", 0), ("Unit", "REL_TIME"), ("Target", target)])
                 return self.send_json(200, {"ok": True})
             if action in {"play", "pause", "stop", "next", "previous"}:
@@ -584,6 +629,11 @@ class Handler(BaseHTTPRequestHandler):
                          "next": ("Next", [("Unit", "TRACK")]),
                          "previous": ("Previous", [("Unit", "TRACK")])}
                 name, args = names[action]
+                if action == "stop":
+                    with STATE.lock:
+                        STATE.queue.pop(renderer["id"], None)
+                        STATE.last_current.pop(renderer["id"], None)
+                        STATE.last_next.pop(renderer["id"], None)
                 soap_call(renderer, name, [("InstanceID", 0)] + args)
                 return self.send_json(200, {"ok": True})
             return self.send_json(404, {"error": "unknown action"})
