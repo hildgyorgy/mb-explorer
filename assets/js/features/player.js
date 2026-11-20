@@ -2,8 +2,8 @@
    Browser and remote playback
    ============================================================ */
 
-import { getActiveLibrarySource } from "../core/librarySource.js";
-import { getRenderer, setCurrentAndNext, setNext, playRenderer, callRenderer, getRendererState, didlMetadata } from "../services/upnpRenderer.js";
+import { getActiveLibrarySource, onLibrarySourceChange } from "../core/librarySource.js";
+import { getRenderer, setCurrentAndNext, setNext, playRenderer, callRenderer, getRendererState, stopBridgeRenderer, didlMetadata } from "../services/upnpRenderer.js";
 
 const audio = new Audio();
 let objectUrl = "";
@@ -18,6 +18,12 @@ let remotePlaying = false;
 let remoteStateTimer = null;
 let remoteCurrentTime = 0;
 let remoteDuration = 0;
+let activeRemoteRenderer = null;
+let activeLocalSource = null;
+let remoteSessionId = 0;
+let pendingRemoteStop = Promise.resolve();
+let remoteCommandInFlight = Promise.resolve();
+let remoteSeekPreview = null;
 
 function playbackSource(entry) {
   const localTrack = entry?.localTrack;
@@ -46,9 +52,18 @@ function remoteItem(entry) {
       artist: entry.artist || album.artist_name || track.artist || "",
       album: album.album_name || track.album || "",
       mime: track.contentType || "audio/flac",
-      duration: track.duration || "",
+      duration: didlDuration(track.duration),
     }, uri),
   };
+}
+
+function didlDuration(value) {
+  const seconds = Math.round(Number(value));
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainder = seconds % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
 const ICONS = {
@@ -253,20 +268,30 @@ function ensureMiniPlayer() {
     }
   });
 
-  miniPlayer.querySelector(".mini-player-progress").addEventListener("input", async (event) => {
+  miniPlayer.querySelector(".mini-player-progress").addEventListener("input", (event) => {
     const nextTime = Number(event.target.value);
     if (!Number.isFinite(nextTime)) return;
-    if (remotePlaybackEnabled(currentTracks[currentIndex])) {
-      const remote = getRenderer();
-      if (remote?.mode === "bridge") {
-        await fetch(`${remote.bridgeUrl}/renderers/${encodeURIComponent(remote.id)}/seek`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seconds: nextTime }),
-        });
-        remoteCurrentTime = nextTime;
-        syncMiniPlayer();
-      }
-    } else audio.currentTime = nextTime;
+    if (remotePlaybackEnabled(currentTracks[currentIndex])) remoteSeekPreview = nextTime;
+    else audio.currentTime = nextTime;
+  });
+  miniPlayer.querySelector(".mini-player-progress").addEventListener("change", async (event) => {
+    if (!remotePlaybackEnabled(currentTracks[currentIndex])) return;
+    const nextTime = Number(event.target.value);
+    remoteSeekPreview = null;
+    const remote = getRenderer();
+    if (!Number.isFinite(nextTime) || remote?.mode !== "bridge") return;
+    const sessionId = remoteSessionId;
+    try {
+      const response = await fetch(`${remote.bridgeUrl}/renderers/${encodeURIComponent(remote.id)}/seek`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seconds: nextTime }),
+      });
+      if (!response.ok) throw new Error(`Seek returned HTTP ${response.status}.`);
+      if (sessionId === remoteSessionId) remoteCurrentTime = nextTime;
+    } catch (error) {
+      console.warn("Could not seek on remote renderer:", error);
+    }
+    if (sessionId === remoteSessionId) syncMiniPlayer();
   });
 
   document.body.appendChild(miniPlayer);
@@ -299,7 +324,7 @@ function syncMiniPlayer() {
   next.disabled = !hasTrack;
 
   const progress = player.querySelector(".mini-player-progress");
-  progress.disabled = !hasTrack || remotePlaybackEnabled(entry);
+  progress.disabled = !hasTrack;
 
   if (!hasTrack) {
     player.querySelector(".mini-player-title").textContent = "Ready to play";
@@ -325,7 +350,7 @@ function syncMiniPlayer() {
   player.querySelector(".mini-player-output").textContent = formatOutput(entry);
 
   const duration = remotePlaybackEnabled(entry) ? remoteDuration : (Number.isFinite(audio.duration) ? audio.duration : 0);
-  const currentTime = remotePlaybackEnabled(entry) ? remoteCurrentTime : (Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
+  const currentTime = remotePlaybackEnabled(entry) ? (remoteSeekPreview ?? remoteCurrentTime) : (Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
   progress.max = String(duration);
   progress.value = String(Math.min(currentTime, duration || currentTime));
   progress.style.setProperty(
@@ -382,6 +407,7 @@ function clearCurrentPlayback() {
   audio.load();
   releaseObjectUrl();
   currentIndex = -1;
+  activeLocalSource = null;
   syncPlayerUi();
   updateMediaSessionPlaybackState("none");
   if (mediaSessionSupported()) navigator.mediaSession.metadata = null;
@@ -393,6 +419,8 @@ async function playIndex(index) {
   if (!source) return;
 
   if (remotePlaybackEnabled(entry)) {
+    await pendingRemoteStop;
+    if (!remotePlaybackEnabled(entry)) return;
     if (currentIndex === index) {
       try {
         if (remotePlaying) { await callRenderer("Pause"); remotePlaying = false; }
@@ -403,14 +431,27 @@ async function playIndex(index) {
     }
     const nextEntry = currentTracks.slice(index + 1).find((item) => remotePlaybackEnabled(item));
     const remoteItems = currentTracks.slice(index).filter((item) => remotePlaybackEnabled(item)).map(remoteItem);
-    await setCurrentAndNext(remoteItem(entry), nextEntry ? remoteItem(nextEntry) : null, remoteItems);
+    const sessionId = ++remoteSessionId;
+    activeRemoteRenderer = { ...getRenderer() };
+    audio.pause();
+    const queueRequest = setCurrentAndNext(remoteItem(entry), nextEntry ? remoteItem(nextEntry) : null, remoteItems);
+    remoteCommandInFlight = queueRequest.catch(() => {});
+    await queueRequest;
+    if (sessionId !== remoteSessionId) return;
+    activeLocalSource = null;
     currentIndex = index;
     remotePlaying = false;
     startRemoteStatePolling();
     syncPlayerUi();
     updateMediaSessionMetadata(entry);
-    try { await playRenderer(); remotePlaying = true; }
+    try {
+      const playRequest = playRenderer();
+      remoteCommandInFlight = playRequest.catch(() => {});
+      await playRequest;
+      remotePlaying = true;
+    }
     catch (error) { console.warn("Could not start remote playback:", error); }
+    if (sessionId !== remoteSessionId) return;
     syncPlayerUi();
     return;
   }
@@ -431,6 +472,7 @@ async function playIndex(index) {
 
   objectUrl = source.kind === "file" ? URL.createObjectURL(source.value) : "";
   currentIndex = index;
+  activeLocalSource = getActiveLibrarySource();
   audio.src = source.kind === "file" ? objectUrl : source.value;
   syncPlayerUi();
   updateMediaSessionMetadata(entry);
@@ -446,9 +488,11 @@ async function playIndex(index) {
 function startRemoteStatePolling() {
   if (remoteStateTimer) return;
   remoteStateTimer = window.setInterval(async () => {
-    if (!getRenderer() || currentIndex < 0) return;
+    if (!activeRemoteRenderer || currentIndex < 0) return;
+    const sessionId = remoteSessionId;
     try {
       const state = await getRendererState();
+      if (sessionId !== remoteSessionId) return;
       remotePlaying = state.CurrentTransportState === "PLAYING";
       remoteCurrentTime = parseClock(state.RelTime);
       remoteDuration = parseClock(state.TrackDuration);
@@ -458,16 +502,53 @@ function startRemoteStatePolling() {
         currentIndex = remoteIndex;
         const nextEntry = currentTracks.slice(remoteIndex + 1).find((item) => remotePlaybackEnabled(item));
         if (nextEntry) {
-          await setNext(remoteItem(nextEntry));
+          const nextRequest = setNext(remoteItem(nextEntry));
+          remoteCommandInFlight = nextRequest.catch(() => {});
+          await nextRequest;
+          if (sessionId !== remoteSessionId) return;
         }
         if (!remotePlaying) {
-          try { await playRenderer(); remotePlaying = true; } catch (error) { console.debug("Could not resume remote queue:", error); }
+          try {
+            const playRequest = playRenderer();
+            remoteCommandInFlight = playRequest.catch(() => {});
+            await playRequest;
+            remotePlaying = true;
+          } catch (error) { console.debug("Could not resume remote queue:", error); }
+          if (sessionId !== remoteSessionId) return;
         }
         updateMediaSessionMetadata(currentTracks[remoteIndex]);
       }
       syncPlayerUi();
     } catch (error) { console.debug("Remote renderer state unavailable:", error); }
   }, 1000);
+}
+
+function handlePlaybackContextChange() {
+  const selected = getRenderer();
+  const source = getActiveLibrarySource();
+  const previous = activeRemoteRenderer;
+  if (previous) {
+    const sameRenderer = source === "navidrome" && selected?.mode === "bridge" &&
+      selected.id === previous.id && selected.bridgeUrl === previous.bridgeUrl;
+    if (sameRenderer) return;
+    activeRemoteRenderer = null;
+    remoteSessionId += 1;
+    window.clearInterval(remoteStateTimer);
+    remoteStateTimer = null;
+    remotePlaying = false;
+    remoteCurrentTime = 0;
+    remoteDuration = 0;
+    remoteSeekPreview = null;
+    clearCurrentPlayback();
+    pendingRemoteStop = remoteCommandInFlight.then(() => stopBridgeRenderer(previous)).catch((error) => {
+      console.warn("Could not stop the previous UPnP renderer:", error);
+    });
+    return;
+  }
+  if (currentIndex >= 0 && activeLocalSource &&
+      (source !== activeLocalSource || (source === "navidrome" && selected?.mode === "bridge"))) {
+    clearCurrentPlayback();
+  }
 }
 
 function parseClock(value) {
@@ -549,6 +630,8 @@ audio.addEventListener("loadedmetadata", () => {
 });
 
 bindMediaSessionActionsOnce();
+onLibrarySourceChange(handlePlaybackContextChange);
+window.addEventListener("playback-output-change", handlePlaybackContextChange);
 
 export function bindTrackPlayback(out, flatTracks, coverImages = null) {
   currentOut = out;

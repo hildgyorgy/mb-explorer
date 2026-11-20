@@ -1,6 +1,8 @@
 services:
   musicbrainz-explorer-bridge:
-    build: .
+    build:
+      context: ../..
+      dockerfile: tools/upnp-bridge/Dockerfile
     container_name: musicbrainz-explorer-bridge
     network_mode: host
     restart: unless-stopped

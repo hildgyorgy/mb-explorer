@@ -16,7 +16,7 @@ active queue.
 ## macOS user instructions
 
 Download the Apple Silicon Mac app from the
-[Bridge 0.2.0 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.0).
+[Bridge 0.2.1 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.1).
 
 1. Open `MusicBrainz-Explorer-Bridge-…-macOS-….dmg`.
 2. Drag **MusicBrainz Explorer Bridge** into **Applications**.
@@ -45,7 +45,7 @@ Navidrome; otherwise the bridge relays it. The Mac must remain awake while the r
 item can open the Explorer, show the diagnostic log, stop or start the bridge,
 or quit the app.
 
-The public 0.2.0 DMG is signed with a **Developer ID Application** certificate,
+The public 0.2.1 DMG is signed with a **Developer ID Application** certificate,
 notarized by Apple, and stapled. Running the build script without
 `CODESIGN_IDENTITY` creates an ad-hoc signed DMG for local testing only.
 
@@ -79,6 +79,9 @@ Environment variables:
 - `MUSICARDS_RENDERER_IP` — optional private IPv4 address for direct renderer
   discovery alongside multicast.
 - `MUSICARDS_ALLOWED_ORIGINS` — additional comma-separated browser origins.
+- `MUSICARDS_ALLOWED_HOSTS` — additional comma-separated Host names for custom
+  local proxy setups. The default accepts loopback names and, from an allowed
+  browser origin, Tailscale Serve `*.ts.net` names.
 
 ## Build the macOS DMG
 
