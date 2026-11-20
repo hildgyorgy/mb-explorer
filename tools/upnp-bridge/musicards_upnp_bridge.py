@@ -4,9 +4,13 @@
 import json
 import html
 import ipaddress
+import mimetypes
 import os
+import re
 import secrets
 import socket
+import subprocess
+import sys
 import threading
 import time
 import urllib.error
@@ -14,12 +18,22 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 AVT_PREFIX = "urn:schemas-upnp-org:service:AVTransport:"
 PORT = int(os.environ.get("MUSICARDS_BRIDGE_PORT", "9181"))
 HOST = os.environ.get("MUSICARDS_BRIDGE_HOST", "0.0.0.0")
 PARENT_PID = int(os.environ.get("MUSICARDS_BRIDGE_PARENT_PID", "0") or 0)
+RENDERER_IP = os.environ.get("MUSICARDS_RENDERER_IP", "").strip()
+SITE_ROOT = (Path(os.environ["MUSICARDS_SITE_ROOT"]).resolve()
+             if os.environ.get("MUSICARDS_SITE_ROOT") else
+             (Path(sys.executable).resolve().parent.parent / "site"
+              if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]))
+SITE_TOP_LEVEL = {"index.html", "support.html", "site.webmanifest", "icon.png",
+                  "favicon.ico", "favicon-16x16.png", "favicon-32x32.png",
+                  "apple-touch-icon.png", "android-chrome-192x192.png",
+                  "android-chrome-512x512.png"}
 PROXY_TTL_SECONDS = 6 * 60 * 60
 DEFAULT_ALLOWED_ORIGINS = {"https://hildgyorgy.github.io"}
 ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS | {
@@ -34,29 +48,127 @@ def xml_value(node, name):
                  if x.tag.rsplit("}", 1)[-1] == name), "")
 
 
+def private_lan_address(value):
+    try:
+        address = ipaddress.IPv4Address(value)
+    except ipaddress.AddressValueError:
+        return None
+    ranges = (ipaddress.IPv4Network("10.0.0.0/8"),
+              ipaddress.IPv4Network("172.16.0.0/12"),
+              ipaddress.IPv4Network("192.168.0.0/16"))
+    return address if any(address in network for network in ranges) else None
+
+
+def mac_multicast_interface():
+    try:
+        route = subprocess.run(
+            ["/sbin/route", "-n", "get", "239.255.255.250"],
+            capture_output=True, text=True, timeout=2, check=False)
+        return next((line.split(":", 1)[1].strip()
+                     for line in route.stdout.splitlines()
+                     if line.strip().startswith("interface:")), "")
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def mac_subnet_candidates(interface):
+    if not interface:
+        return []
+    try:
+        details = subprocess.run(["/sbin/ifconfig", interface],
+                                 capture_output=True, text=True, timeout=2,
+                                 check=False).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    match = re.search(r"\binet\s+(\d+\.\d+\.\d+\.\d+)\s+netmask\s+(0x[\da-fA-F]+|\d+\.\d+\.\d+\.\d+)", details)
+    if not match:
+        return []
+    address = private_lan_address(match.group(1))
+    if not address:
+        return []
+    mask = match.group(2)
+    if mask.startswith("0x"):
+        mask = str(ipaddress.IPv4Address(int(mask, 16)))
+    try:
+        network = ipaddress.IPv4Network(f"{address}/{mask}", strict=False)
+    except ValueError:
+        return []
+    if network.num_addresses > 256:
+        network = ipaddress.IPv4Network(f"{address}/24", strict=False)
+    return [str(host) for host in network.hosts() if host != address]
+
+
+def receive_ssdp(sock, found, duration):
+    deadline = time.monotonic() + duration
+    while time.monotonic() < deadline:
+        sock.settimeout(max(0.01, deadline - time.monotonic()))
+        try:
+            data, address = sock.recvfrom(65535)
+        except socket.timeout:
+            break
+        headers = {}
+        for line in data.decode("utf-8", "replace").split("\r\n"):
+            if ":" in line:
+                key, value = line.split(":", 1)
+                headers[key.lower()] = value.strip()
+        location = headers.get("location")
+        if location:
+            found[location] = {"location": location, "address": address[0]}
+
+
 def discover():
     message = ("M-SEARCH * HTTP/1.1\r\n"
                "HOST: 239.255.255.250:1900\r\n"
                'MAN: "ssdp:discover"\r\nMX: 1\r\n'
                "ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n\r\n")
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.settimeout(1.5)
     found = {}
     try:
-        sock.sendto(message.encode(), ("239.255.255.250", 1900))
-        while True:
+        interface = ""
+        if sys.platform == "darwin":
+            # macOS can reject multicast with EHOSTUNREACH unless the socket is
+            # bound to the interface selected by its multicast route.
+            interface = mac_multicast_interface()
             try:
-                data, address = sock.recvfrom(65535)
-            except socket.timeout:
-                break
-            headers = {}
-            for line in data.decode("utf-8", "replace").split("\r\n"):
-                if ":" in line:
-                    key, value = line.split(":", 1)
-                    headers[key.lower()] = value.strip()
-            location = headers.get("location")
-            if location:
-                found[location] = {"location": location, "address": address[0]}
+                if interface:
+                    sock.setsockopt(socket.IPPROTO_IP, 25, socket.if_nametoindex(interface))
+            except OSError:
+                pass
+        for target in ("urn:schemas-upnp-org:device:MediaRenderer:2",
+                       "urn:schemas-upnp-org:device:MediaRenderer:1"):
+            multicast_message = message.replace(
+                "ST: urn:schemas-upnp-org:device:MediaRenderer:1", f"ST: {target}")
+            try:
+                sock.sendto(multicast_message.encode(), ("239.255.255.250", 1900))
+            except OSError:
+                if not RENDERER_IP and sys.platform != "darwin":
+                    raise
+        direct_address = private_lan_address(RENDERER_IP) if RENDERER_IP else None
+        if direct_address:
+            try:
+                direct_message = message.replace(
+                    "HOST: 239.255.255.250:1900", f"HOST: {direct_address}:1900").replace(
+                    "ST: urn:schemas-upnp-org:device:MediaRenderer:1", "ST: ssdp:all")
+                sock.sendto(direct_message.encode(), (str(direct_address), 1900))
+            except OSError:
+                pass
+        receive_ssdp(sock, found, 3 if direct_address else 1.5)
+        if not found and sys.platform == "darwin":
+            # Match the native app's bounded /24 deep search when multicast
+            # misses a renderer across wired/Wi-Fi network segments.
+            targets = ("urn:schemas-upnp-org:device:MediaRenderer:2",
+                       "urn:schemas-upnp-org:device:MediaRenderer:1",
+                       "upnp:rootdevice")
+            for host in mac_subnet_candidates(interface):
+                for target in targets:
+                    direct_message = message.replace(
+                        "HOST: 239.255.255.250:1900", f"HOST: {host}:1900").replace(
+                        "ST: urn:schemas-upnp-org:device:MediaRenderer:1", f"ST: {target}")
+                    try:
+                        sock.sendto(direct_message.encode(), (host, 1900))
+                    except OSError:
+                        continue
+            receive_ssdp(sock, found, 4)
     finally:
         sock.close()
     return list(found.values())
@@ -302,6 +414,38 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def serve_site(self, path, head_only=False):
+        if not self.is_loopback_client():
+            self.send_error(403, "Local website access only")
+            return
+        relative = urllib.parse.unquote(path).lstrip("/") or "index.html"
+        if relative not in SITE_TOP_LEVEL and not relative.startswith("assets/"):
+            self.send_error(404, "Not found")
+            return
+        target = (SITE_ROOT / relative).resolve()
+        try:
+            target.relative_to(SITE_ROOT / "assets" if relative.startswith("assets/") else SITE_ROOT)
+        except ValueError:
+            self.send_error(404, "Not found")
+            return
+        if not target.is_file():
+            self.send_error(404, "Not found")
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if target.suffix in {".js", ".mjs"}:
+            content_type = "text/javascript"
+        size = target.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        if not head_only:
+            with target.open("rb") as source:
+                while chunk := source.read(128 * 1024):
+                    self.wfile.write(chunk)
+
     def do_OPTIONS(self):
         if not self.allow_control_request():
             return self.send_json(403, {"error": "local control access denied"})
@@ -356,6 +500,8 @@ class Handler(BaseHTTPRequestHandler):
             parts = path.strip("/").split("/")
             if len(parts) == 2 and parts[0] == "proxy":
                 return self.proxy_audio(parts[1])
+            if path == "/" or path.lstrip("/") in SITE_TOP_LEVEL or path.startswith("/assets/"):
+                return self.serve_site(path)
             if not self.allow_control_request():
                 return self.send_json(403, {"error": "local control access denied"})
             if self.path == "/health":
@@ -375,9 +521,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_HEAD(self):
         try:
-            parts = urllib.parse.urlsplit(self.path).path.strip("/").split("/")
+            path = urllib.parse.urlsplit(self.path).path
+            parts = path.strip("/").split("/")
             if len(parts) == 2 and parts[0] == "proxy":
                 return self.proxy_audio(parts[1], head_only=True)
+            if path == "/" or path.lstrip("/") in SITE_TOP_LEVEL or path.startswith("/assets/"):
+                return self.serve_site(path, head_only=True)
             self.send_response(404)
             self.end_headers()
         except Exception as error:

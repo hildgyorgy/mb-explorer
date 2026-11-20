@@ -92,9 +92,17 @@ export async function loadBridgeRenderer(bridgeUrl = getBridgeUrl()) {
 
 export async function discoverBridgeRenderers(bridgeUrl = getBridgeUrl()) {
   const normalized = normalizeBridgeUrl(bridgeUrl);
-  const response = await fetch(`${normalized}/renderers`, {
-    headers: { Accept: "application/json" },
-  });
+  let response;
+  try {
+    response = await fetch(`${normalized}/renderers`, {
+      headers: { Accept: "application/json" },
+    });
+  } catch (error) {
+    if (globalThis.location?.protocol === "https:" && normalized.startsWith("http://")) {
+      throw new Error("This browser may block the HTTP bridge from this HTTPS page. Use an HTTPS Bridge URL (for example, Tailscale Serve).");
+    }
+    throw error;
+  }
   if (!response.ok) throw new Error(`UPnP bridge returned HTTP ${response.status}.`);
   const payload = await response.json();
   discoveredRenderers = Array.isArray(payload.renderers) ? payload.renderers : [];

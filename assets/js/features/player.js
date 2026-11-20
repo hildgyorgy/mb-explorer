@@ -101,6 +101,21 @@ function formatSourceQuality(track) {
   return [quality, channels].filter(Boolean).join(" • ");
 }
 
+function formatArtistAlbum(entry) {
+  const artist = entry?.artist || entry?.localTrack?.album?.artist_name ||
+    entry?.localTrack?.track?.artist || "";
+  const album = entry?.localTrack?.album?.album_name ||
+    entry?.localTrack?.track?.album || "";
+  return [artist, album].filter(Boolean).join(": ");
+}
+
+function formatOutput(entry) {
+  if (remotePlaybackEnabled(entry)) {
+    return getRenderer()?.friendlyName || "UPnP renderer";
+  }
+  return "System audio";
+}
+
 /* ============================================================
    Media Session — surfaces now-playing info to the OS
    (Control Center, lock screen, AirPlay receivers, etc.)
@@ -215,15 +230,14 @@ function ensureMiniPlayer() {
       <button class="mini-player-button" type="button" data-player-action="next" aria-label="Next track">${ICONS.next}</button>
     </div>
     <div class="mini-player-main">
-      <div class="mini-player-copy">
-        <span class="mini-player-title"></span>
-        <span class="mini-player-artist"></span>
-        <span class="mini-player-quality"></span>
-      </div>
+      <span class="mini-player-title"></span>
+      <span class="mini-player-quality"></span>
       <div class="mini-player-timeline">
         <input class="mini-player-progress" type="range" min="0" max="0" value="0" step="0.1" aria-label="Track position">
         <span class="mini-player-time">0:00 / 0:00</span>
       </div>
+      <span class="mini-player-artist"></span>
+      <span class="mini-player-output"></span>
     </div>`;
 
   miniPlayer.addEventListener("click", async (event) => {
@@ -231,7 +245,7 @@ function ensureMiniPlayer() {
     if (action === "previous") playPreviousLocalTrack();
     if (action === "next") playNextLocalTrack();
     if (action === "toggle") {
-      if (currentIndex >= 0) await playIndex(currentIndex);
+      if (playbackSource(currentTracks[currentIndex])) await playIndex(currentIndex);
       else {
         const firstPlayableIndex = viewedTracks.findIndex((entry) => playbackSource(entry));
         if (firstPlayableIndex >= 0) await playViewedIndex(firstPlayableIndex);
@@ -292,6 +306,7 @@ function syncMiniPlayer() {
     player.querySelector(".mini-player-artist").textContent =
       `${playableTrackCount.toLocaleString()} available ${playableTrackCount === 1 ? "track" : "tracks"}`;
     player.querySelector(".mini-player-quality").textContent = "";
+    player.querySelector(".mini-player-output").textContent = "";
     progress.max = "0";
     progress.value = "0";
     progress.style.setProperty("--player-progress", "0%");
@@ -304,9 +319,10 @@ function syncMiniPlayer() {
   player.querySelector(".mini-player-title").textContent =
     entry.title || entry.localTrack.track?.title || entry.localTrack.file?.name || "";
   player.querySelector(".mini-player-artist").textContent =
-    entry.localTrack.album?.artist_name || "";
+    formatArtistAlbum(entry);
   player.querySelector(".mini-player-quality").textContent =
     formatSourceQuality(entry.localTrack.track);
+  player.querySelector(".mini-player-output").textContent = formatOutput(entry);
 
   const duration = remotePlaybackEnabled(entry) ? remoteDuration : (Number.isFinite(audio.duration) ? audio.duration : 0);
   const currentTime = remotePlaybackEnabled(entry) ? remoteCurrentTime : (Number.isFinite(audio.currentTime) ? audio.currentTime : 0);
@@ -345,7 +361,8 @@ function syncPlayerUi() {
         (!activePath && activeFile && viewedFile === activeFile) ||
         (!activePath && !activeFile && activeUrl && viewedUrl === activeUrl)
       );
-      const isPlaying = isCurrent && !audio.paused && !audio.ended;
+      const isPlaying = isCurrent && (remotePlaybackEnabled(activeEntry)
+        ? remotePlaying : !audio.paused && !audio.ended);
       const row = button.closest("tr.track");
 
       button.classList.toggle("is-current", isCurrent);
@@ -388,12 +405,13 @@ async function playIndex(index) {
     const remoteItems = currentTracks.slice(index).filter((item) => remotePlaybackEnabled(item)).map(remoteItem);
     await setCurrentAndNext(remoteItem(entry), nextEntry ? remoteItem(nextEntry) : null, remoteItems);
     currentIndex = index;
-    remotePlaying = true;
+    remotePlaying = false;
     startRemoteStatePolling();
     syncPlayerUi();
     updateMediaSessionMetadata(entry);
-    try { await playRenderer(); }
+    try { await playRenderer(); remotePlaying = true; }
     catch (error) { console.warn("Could not start remote playback:", error); }
+    syncPlayerUi();
     return;
   }
 
@@ -447,7 +465,7 @@ function startRemoteStatePolling() {
         }
         updateMediaSessionMetadata(currentTracks[remoteIndex]);
       }
-      syncMiniPlayer();
+      syncPlayerUi();
     } catch (error) { console.debug("Remote renderer state unavailable:", error); }
   }, 1000);
 }

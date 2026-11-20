@@ -4,7 +4,12 @@ import Foundation
 final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
+    private var startMenuItem: NSMenuItem!
+    private var stopMenuItem: NSMenuItem!
+    private var rendererMenuItem: NSMenuItem!
     private var bridgeProcess: Process?
+    private var isStopping = false
+    private var restartAfterStop = false
     private var logHandle: FileHandle?
     private var healthTimer: Timer?
 
@@ -16,7 +21,14 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "hifispeaker.2", accessibilityDescription: "MusicBrainz Explorer Bridge")
+            if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+               let icon = NSImage(contentsOf: iconURL) {
+                icon.size = NSSize(width: 18, height: 18)
+                icon.isTemplate = false
+                button.image = icon
+            } else {
+                button.image = NSImage(systemSymbolName: "hifispeaker.2", accessibilityDescription: "MusicBrainz Explorer Bridge")
+            }
             button.toolTip = "MusicBrainz Explorer Bridge"
         }
 
@@ -25,14 +37,20 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Open MusicBrainz Explorer", action: #selector(openExplorer), keyEquivalent: "")
-        menu.addItem(withTitle: "Show Log", action: #selector(showLog), keyEquivalent: "")
-        menu.addItem(withTitle: "Restart Bridge", action: #selector(restartBridge), keyEquivalent: "")
+        startMenuItem = menu.addItem(withTitle: "Start UPnP Bridge", action: #selector(startBridge), keyEquivalent: "")
+        stopMenuItem = menu.addItem(withTitle: "Stop UPnP Bridge", action: #selector(stopBridge), keyEquivalent: "")
+        rendererMenuItem = menu.addItem(withTitle: "Renderer IP: Automatic…", action: #selector(configureRendererIP), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Open MusicBrainz Explorer (Local)", action: #selector(openExplorer), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Published Website", action: #selector(openPublishedExplorer), keyEquivalent: "")
+        menu.addItem(withTitle: "Show Log", action: #selector(showLog), keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit App", action: #selector(quit), keyEquivalent: "q")
         for item in menu.items where item.action != nil { item.target = self }
         statusItem.menu = menu
 
+        updateRendererMenuTitle()
+        updateMenuActions()
         startBridge()
         healthTimer = Timer.scheduledTimer(timeInterval: 2, target: self,
                                            selector: #selector(checkHealth),
@@ -40,8 +58,58 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
         checkHealth()
     }
 
-    private func startBridge() {
-        guard bridgeProcess?.isRunning != true else { return }
+    private func updateMenuActions() {
+        let running = bridgeProcess?.isRunning == true
+        startMenuItem.isEnabled = bridgeProcess == nil && !isStopping
+        stopMenuItem.isEnabled = running && !isStopping
+    }
+
+    private func updateRendererMenuTitle() {
+        let address = UserDefaults.standard.string(forKey: "rendererIP") ?? ""
+        rendererMenuItem.title = address.isEmpty ? "Renderer IP: Automatic…" : "Renderer IP: \(address)…"
+    }
+
+    private func validRendererIP(_ value: String) -> Bool {
+        let parts = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        let octets = parts.compactMap { UInt8($0) }
+        guard octets.count == 4 else { return false }
+        return octets[0] == 10 ||
+            (octets[0] == 172 && (16...31).contains(Int(octets[1]))) ||
+            (octets[0] == 192 && octets[1] == 168)
+    }
+
+    @objc private func configureRendererIP() {
+        let alert = NSAlert()
+        alert.messageText = "Renderer IP address"
+        alert.informativeText = "Enter the renderer's local IPv4 address if automatic discovery does not find it. Leave blank for automatic discovery."
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        input.stringValue = UserDefaults.standard.string(forKey: "rendererIP") ?? ""
+        input.placeholderString = "192.168.1.50"
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let address = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard address.isEmpty || validRendererIP(address) else {
+            let error = NSAlert()
+            error.messageText = "Enter a private IPv4 address"
+            error.informativeText = "Use the renderer's local 10.x.x.x, 172.16–31.x.x, or 192.168.x.x address."
+            error.runModal()
+            return
+        }
+        if address.isEmpty { UserDefaults.standard.removeObject(forKey: "rendererIP") }
+        else { UserDefaults.standard.set(address, forKey: "rendererIP") }
+        updateRendererMenuTitle()
+        if bridgeProcess?.isRunning == true {
+            restartAfterStop = true
+            stopBridge()
+        }
+    }
+
+    @objc private func startBridge() {
+        guard bridgeProcess == nil && !isStopping else { return }
         guard let resources = Bundle.main.resourceURL else {
             statusMenuItem.title = "Bridge resources missing"
             return
@@ -68,30 +136,45 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
             environment["MUSICARDS_BRIDGE_HOST"] = "0.0.0.0"
             environment["MUSICARDS_BRIDGE_PORT"] = "9181"
             environment["MUSICARDS_BRIDGE_PARENT_PID"] = String(ProcessInfo.processInfo.processIdentifier)
+            environment["MUSICARDS_RENDERER_IP"] = UserDefaults.standard.string(forKey: "rendererIP") ?? ""
             process.environment = environment
             process.standardOutput = logHandle
             process.standardError = logHandle
-            process.terminationHandler = { [weak self] _ in
+            process.terminationHandler = { [weak self, weak process] _ in
                 DispatchQueue.main.async {
-                    self?.bridgeProcess = nil
-                    self?.statusMenuItem.title = "Bridge stopped"
-                    self?.checkHealth()
+                    guard let self = self, let process = process,
+                          self.bridgeProcess === process else { return }
+                    self.bridgeProcess = nil
+                    self.isStopping = false
+                    try? self.logHandle?.close()
+                    self.logHandle = nil
+                    self.statusMenuItem.title = "Bridge stopped"
+                    self.updateMenuActions()
+                    if self.restartAfterStop {
+                        self.restartAfterStop = false
+                        self.startBridge()
+                    }
                 }
             }
             try process.run()
             bridgeProcess = process
             statusMenuItem.title = "Bridge starting…"
+            updateMenuActions()
         } catch {
             statusMenuItem.title = "Bridge could not start"
             appendLog("Launcher error: \(error.localizedDescription)\n")
+            try? logHandle?.close()
+            logHandle = nil
+            updateMenuActions()
         }
     }
 
-    private func stopBridge() {
-        if bridgeProcess?.isRunning == true { bridgeProcess?.terminate() }
-        bridgeProcess = nil
-        try? logHandle?.close()
-        logHandle = nil
+    @objc private func stopBridge() {
+        guard let process = bridgeProcess, process.isRunning, !isStopping else { return }
+        isStopping = true
+        statusMenuItem.title = "Bridge stopping…"
+        updateMenuActions()
+        process.terminate()
     }
 
     private func appendLog(_ text: String) {
@@ -100,26 +183,24 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func checkHealth() {
+        guard let process = bridgeProcess, process.isRunning, !isStopping else { return }
         guard let url = URL(string: "http://127.0.0.1:9181/health") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = 1
         URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
             let healthy = (response as? HTTPURLResponse)?.statusCode == 200
             DispatchQueue.main.async {
-                self?.statusMenuItem.title = healthy ? "Bridge running" : "Bridge unavailable"
+                guard let self = self, self.bridgeProcess === process, !self.isStopping else { return }
+                self.statusMenuItem.title = healthy ? "Bridge running" : "Bridge unavailable"
             }
         }.resume()
     }
 
-    @objc private func restartBridge() {
-        stopBridge()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
-            self?.startBridge()
-            self?.checkHealth()
-        }
+    @objc private func openExplorer() {
+        NSWorkspace.shared.open(URL(string: "http://127.0.0.1:9181/")!)
     }
 
-    @objc private func openExplorer() {
+    @objc private func openPublishedExplorer() {
         NSWorkspace.shared.open(URL(string: "https://hildgyorgy.github.io/mb-explorer/")!)
     }
 
@@ -136,7 +217,8 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         healthTimer?.invalidate()
-        stopBridge()
+        restartAfterStop = false
+        if bridgeProcess?.isRunning == true { bridgeProcess?.terminate() }
     }
 }
 

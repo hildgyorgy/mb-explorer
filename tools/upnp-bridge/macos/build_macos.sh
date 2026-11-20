@@ -39,6 +39,13 @@ mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources/bridge"
 cp "$SCRIPT_DIR/Info.plist" "$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_PATH/Contents/Info.plist"
 cp -R "$BUILD_DIR/pyinstaller-dist/$SERVICE_NAME/"* "$APP_PATH/Contents/Resources/bridge/"
+mkdir -p "$APP_PATH/Contents/Resources/site"
+cp "$REPO_DIR/index.html" "$REPO_DIR/support.html" "$REPO_DIR/site.webmanifest" \
+  "$REPO_DIR/icon.png" "$REPO_DIR/favicon.ico" \
+  "$REPO_DIR/favicon-16x16.png" "$REPO_DIR/favicon-32x32.png" \
+  "$REPO_DIR/apple-touch-icon.png" "$REPO_DIR/android-chrome-192x192.png" \
+  "$REPO_DIR/android-chrome-512x512.png" "$APP_PATH/Contents/Resources/site/"
+cp -R "$REPO_DIR/assets" "$APP_PATH/Contents/Resources/site/"
 
 swiftc -swift-version 5 -framework AppKit \
   -target "${ARCH}-apple-macosx13.0" \
