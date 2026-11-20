@@ -548,10 +548,16 @@
     </section>
 
     <footer class="footer">
-      MusicBrainz Explorer v1.5.0<br>
+      MusicBrainz Explorer <span data-app-version></span><br>
       © 2026 György Hild
     </footer>
   </main>
+  <script type="module">
+    import { APP_VERSION } from "./assets/js/core/config.js";
+    document.querySelectorAll("[data-app-version]").forEach((label) => {
+      label.textContent = `v${APP_VERSION}`;
+    });
+  </script>
 </body>
 
 </html>

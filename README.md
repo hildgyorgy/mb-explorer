@@ -2,7 +2,7 @@
 
 # MusicBrainz Explorer
 
-_version 1.5.0_
+_version 1.5.1_
 
 A small, framework-free web app for exploring MusicBrainz releases and playing
 the matching files from your own music library.

@@ -204,6 +204,15 @@ a:hover {
   position: relative;
 }
 
+.app-version-badge {
+  flex: 0 0 auto;
+  color: var(--meta);
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
 #omni {
   width: 100%;
   padding: 10px 10px;
