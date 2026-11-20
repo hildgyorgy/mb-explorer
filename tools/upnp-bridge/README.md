@@ -5,9 +5,10 @@ MediaRenderers. It discovers renderers with SSDP, sends AVTransport commands,
 and exposes short-lived local proxy URLs so a renderer can play a Navidrome
 stream even when it cannot reach the browser's Navidrome URL directly.
 
-The same bridge service supports two installations: a native macOS menu-bar
-app on the browsing Mac, or an always-on Docker service on the Navidrome/UPnP
-home network. The browser-control API accepts requests only through loopback
+The published download is a native macOS menu-bar app. This repository also
+contains Docker source files for people building their own deployment; no
+prebuilt Docker image or Umbrel package is currently released. The
+browser-control API accepts requests only through loopback
 and only from the published Explorer origin or a localhost development origin.
 Network devices can access only unguessable audio-proxy URLs created for the
 active queue.
@@ -103,10 +104,11 @@ macos/notarize_macos.sh dist/MusicBrainz-Explorer-Bridge-…dmg NOTARY_PROFILE
 Store notarization credentials once with `xcrun notarytool store-credentials`;
 never place them in the repository or build script.
 
-## Docker / Linux
+## Docker / Linux: build from source
 
-Docker is the preferred always-on installation for Linux, Raspberry Pi and
-Umbrel. SSDP requires host networking:
+This is a source-build example, not a downloadable Bridge release. A custom
+always-on Docker deployment on Linux, Raspberry Pi or Umbrel requires host
+networking for SSDP:
 
 ```sh
 docker compose up -d --build
@@ -119,7 +121,7 @@ as mixed content. Opening the bundled local webapp from the Bridge app avoids
 that conflict. To keep using the published HTTPS page, a Mac running Tailscale
 can use `tailscale serve --bg 9181` for a private HTTPS Bridge URL.
 
-### Umbrel with Tailscale Serve
+### Custom Umbrel deployment with Tailscale Serve
 
 The Explorer is an HTTPS page, so it cannot reliably call a plain HTTP service
 at `umbrel.local`. Keep the bridge private and put Tailscale Serve in front of
