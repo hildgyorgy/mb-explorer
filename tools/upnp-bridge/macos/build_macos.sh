@@ -6,7 +6,7 @@ BRIDGE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_DIR="$(cd "$BRIDGE_DIR/../.." && pwd)"
 BUILD_DIR="$BRIDGE_DIR/.build/macos"
 DIST_DIR="$BRIDGE_DIR/dist"
-VERSION="${BRIDGE_VERSION:-0.1.0}"
+VERSION="${BRIDGE_VERSION:-0.2.0}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 APP_NAME="MusicBrainz Explorer Bridge"
 APP_PATH="$DIST_DIR/$APP_NAME.app"
@@ -38,6 +38,7 @@ fi
 mkdir -p "$APP_PATH/Contents/MacOS" "$APP_PATH/Contents/Resources/bridge"
 cp "$SCRIPT_DIR/Info.plist" "$APP_PATH/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP_PATH/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP_PATH/Contents/Info.plist"
 cp -R "$BUILD_DIR/pyinstaller-dist/$SERVICE_NAME/"* "$APP_PATH/Contents/Resources/bridge/"
 mkdir -p "$APP_PATH/Contents/Resources/site"
 cp "$REPO_DIR/index.html" "$REPO_DIR/support.html" "$REPO_DIR/site.webmanifest" \
@@ -67,6 +68,17 @@ if [[ "$SIGN_IDENTITY" == "-" ]]; then
 else
   codesign --force --deep --options runtime --timestamp \
     --sign "$SIGN_IDENTITY" "$APP_PATH"
+  # PyInstaller's copy of the Xcode Python framework needs its own resource
+  # seal. A deep app signature alone leaves the framework invalid for Apple
+  # notarization even though the outer app passes codesign verification.
+  PYTHON_FRAMEWORK="$APP_PATH/Contents/Resources/bridge/_internal/Python3.framework"
+  if [[ -d "$PYTHON_FRAMEWORK" ]]; then
+    codesign --force --options runtime --timestamp \
+      --sign "$SIGN_IDENTITY" "$PYTHON_FRAMEWORK"
+    codesign --verify --strict --verbose=2 "$PYTHON_FRAMEWORK"
+    codesign --force --options runtime --timestamp \
+      --sign "$SIGN_IDENTITY" "$APP_PATH"
+  fi
 fi
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 

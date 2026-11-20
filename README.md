@@ -28,7 +28,7 @@ calm navigation and an optional local playback layer.
 - Light and dark themes with responsive desktop and mobile layouts
 - Local-library results integrated into the same MusicBrainz search
 - Local-folder and Navidrome/OpenSubsonic library sources, with separate remote and home-network Navidrome addresses
-- System-audio playback; UPnP network-renderer output is under development
+- System-audio playback and optional UPnP network-renderer output through the Mac Bridge app
 - MusicBrainz compatibility reports for connected libraries
 - Minimal playback controls that stay available while browsing other releases
 - Source information such as codec, bit depth, sample rate and channel count
