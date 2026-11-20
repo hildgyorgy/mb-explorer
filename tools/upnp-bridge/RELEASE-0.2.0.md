@@ -2,6 +2,8 @@
 
 The first public Mac release of the UPnP Bridge. The DMG contains the Bridge menu-bar app and a current copy of MusicBrainz Explorer that opens locally for straightforward UPnP playback.
 
+The Mac app is signed with Developer ID and the DMG is notarized by Apple.
+
 ## Requirements
 
 - Mac with Apple silicon and macOS 13 or later
@@ -18,3 +20,5 @@ The first public Mac release of the UPnP Bridge. The DMG contains the Bridge men
 The app searches the local network automatically, including a deeper search when multicast discovery misses a renderer. Its menu shows the detected renderer's name and IP address. A manual renderer IP option is available if discovery still misses it.
 
 The local Explorer and Bridge use `http://127.0.0.1:9181`, so this setup does not need Tailscale for browser-to-Bridge control. The published HTTPS Explorer remains available separately and needs an HTTPS Bridge URL for UPnP control in Safari. For direct audio delivery, configure Navidrome's **Home network URL for UPnP** in Explorer.
+
+SHA-256 of the DMG: `e00107a99e9e255ca8dc112028ca6f56b2cc36a29ddd4af6751e94e0b5ee03cc`

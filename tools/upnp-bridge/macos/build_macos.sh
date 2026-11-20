@@ -68,6 +68,17 @@ if [[ "$SIGN_IDENTITY" == "-" ]]; then
 else
   codesign --force --deep --options runtime --timestamp \
     --sign "$SIGN_IDENTITY" "$APP_PATH"
+  # PyInstaller's copy of the Xcode Python framework needs its own resource
+  # seal. A deep app signature alone leaves the framework invalid for Apple
+  # notarization even though the outer app passes codesign verification.
+  PYTHON_FRAMEWORK="$APP_PATH/Contents/Resources/bridge/_internal/Python3.framework"
+  if [[ -d "$PYTHON_FRAMEWORK" ]]; then
+    codesign --force --options runtime --timestamp \
+      --sign "$SIGN_IDENTITY" "$PYTHON_FRAMEWORK"
+    codesign --verify --strict --verbose=2 "$PYTHON_FRAMEWORK"
+    codesign --force --options runtime --timestamp \
+      --sign "$SIGN_IDENTITY" "$APP_PATH"
+  fi
 fi
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
