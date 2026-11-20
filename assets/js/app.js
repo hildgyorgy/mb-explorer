@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { bootFromUrl } from "./core/boot.js";
+import { APP_VERSION } from "./core/config.js";
 import { createReleaseNavigator } from "./services/navigation.js";
 import { applyTheme, getPreferredTheme, bindThemeToggleOnce } from "./ui/theme.js";
 import { createSearchController } from "./ui/searchController.js";
@@ -69,6 +70,9 @@ function bindAnimatedDialogCloseButtons(root = document) {
 // ------------------------------
 export const App = Object.freeze({
   init() {
+    document.querySelectorAll("[data-app-version]").forEach((label) => {
+      label.textContent = `v${APP_VERSION}`;
+    });
     applyTheme(getPreferredTheme());
     applyReleaseLayout();
     bindThemeToggleOnce(document);

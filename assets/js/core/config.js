@@ -1,3 +1,5 @@
+export const APP_VERSION = "1.5.1";
+
 export const CONFIG = Object.freeze({
   // Responsive breakpoint (keep in sync with CSS @media)
   MOBILE_BP: 640,
