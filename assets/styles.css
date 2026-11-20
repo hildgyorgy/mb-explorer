@@ -988,6 +988,56 @@ a:hover {
   opacity: .42;
 }
 
+.bridge-download {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 8px 0 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--panel-2);
+}
+
+.bridge-download strong,
+.bridge-download span {
+  display: block;
+}
+
+.bridge-download strong {
+  font-size: 13px;
+}
+
+.bridge-download span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.bridge-download a {
+  flex: 0 0 auto;
+  color: var(--link);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.bridge-download a:hover,
+.bridge-download a:focus-visible {
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .bridge-download {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
 .bridge-url-field {
   display: grid;
   gap: 5px;

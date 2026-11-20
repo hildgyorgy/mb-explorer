@@ -14,14 +14,21 @@ active queue.
 
 ## macOS user instructions
 
+Download the Apple Silicon Mac app from the
+[Bridge 0.2.0 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.0).
+
 1. Open `MusicBrainz-Explorer-Bridge-…-macOS-….dmg`.
 2. Drag **MusicBrainz Explorer Bridge** into **Applications**.
 3. Start it. On first launch, allow local-network access when macOS asks.
-4. The app starts the bridge and shows its logo in the menu bar. Choose
-   **Open MusicBrainz Explorer (Local)** to open its bundled webapp at
+4. The app starts the bridge and shows its logo in the menu bar. The icon is
+   blue while the bridge is running and uses the system menu-bar color when
+   stopped. Choose **Open MB Explorer locally (easy UPnP playback)** to open
+   its bundled webapp at
    `http://127.0.0.1:9181/`. This local webapp talks to the bridge at the
    same address, so Safari does not need Tailscale Serve for bridge control.
    The menu also shows **Bridge running**, stop or start the bridge, or quit.
+   Under **Detected renderers**, it shows each discovered device's name and
+   local IP address. Opening the menu refreshes this list in the background.
    Discovery first uses multicast SSDP, then a bounded local-network deep
    search if needed. If both miss a renderer, choose **Renderer IP** and enter
    its local address; the bridge restarts with direct discovery enabled.

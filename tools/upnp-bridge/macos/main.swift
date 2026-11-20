@@ -1,17 +1,31 @@
 import AppKit
 import Foundation
 
-final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
+private struct RendererList: Decodable {
+    struct Renderer: Decodable {
+        let friendlyName: String
+        let address: String
+    }
+    let renderers: [Renderer]
+}
+
+final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
     private var startMenuItem: NSMenuItem!
     private var stopMenuItem: NSMenuItem!
+    private var detectedHeading: NSMenuItem!
+    private var detectedRows: [NSMenuItem] = []
     private var rendererMenuItem: NSMenuItem!
     private var bridgeProcess: Process?
     private var isStopping = false
     private var restartAfterStop = false
     private var logHandle: FileHandle?
     private var healthTimer: Timer?
+    private var rendererTask: URLSessionDataTask?
+    private var rendererGeneration = 0
+    private var idleIcon: NSImage?
+    private var runningIcon: NSImage?
 
     private var logURL: URL {
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
@@ -20,17 +34,7 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        if let button = statusItem.button {
-            if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
-               let icon = NSImage(contentsOf: iconURL) {
-                icon.size = NSSize(width: 18, height: 18)
-                icon.isTemplate = false
-                button.image = icon
-            } else {
-                button.image = NSImage(systemSymbolName: "hifispeaker.2", accessibilityDescription: "MusicBrainz Explorer Bridge")
-            }
-            button.toolTip = "MusicBrainz Explorer Bridge"
-        }
+        configureStatusIcon()
 
         let menu = NSMenu()
         statusMenuItem = NSMenuItem(title: "Bridge starting…", action: nil, keyEquivalent: "")
@@ -39,15 +43,21 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         startMenuItem = menu.addItem(withTitle: "Start UPnP Bridge", action: #selector(startBridge), keyEquivalent: "")
         stopMenuItem = menu.addItem(withTitle: "Stop UPnP Bridge", action: #selector(stopBridge), keyEquivalent: "")
+        menu.addItem(.separator())
+        detectedHeading = NSMenuItem(title: "Detected renderers", action: nil, keyEquivalent: "")
+        detectedHeading.isEnabled = false
+        menu.addItem(detectedHeading)
         rendererMenuItem = menu.addItem(withTitle: "Renderer IP: Automatic…", action: #selector(configureRendererIP), keyEquivalent: "")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Open MusicBrainz Explorer (Local)", action: #selector(openExplorer), keyEquivalent: "")
-        menu.addItem(withTitle: "Open Published Website", action: #selector(openPublishedExplorer), keyEquivalent: "")
+        menu.addItem(withTitle: "Open MB Explorer online (UPnP via Tailscale)", action: #selector(openPublishedExplorer), keyEquivalent: "")
+        menu.addItem(withTitle: "Open MB Explorer locally (easy UPnP playback)", action: #selector(openExplorer), keyEquivalent: "")
         menu.addItem(withTitle: "Show Log", action: #selector(showLog), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit App", action: #selector(quit), keyEquivalent: "q")
         for item in menu.items where item.action != nil { item.target = self }
         statusItem.menu = menu
+        menu.delegate = self
+        showRendererRows(["Searching for renderers…"])
 
         updateRendererMenuTitle()
         updateMenuActions()
@@ -64,9 +74,95 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
         stopMenuItem.isEnabled = running && !isStopping
     }
 
+    private func configureStatusIcon() {
+        guard let button = statusItem.button else { return }
+        button.toolTip = "MusicBrainz Explorer Bridge"
+        guard let iconURL = Bundle.main.url(forResource: "icon", withExtension: "png", subdirectory: "site"),
+              let source = NSImage(contentsOf: iconURL) else {
+            let fallback = NSImage(systemSymbolName: "hifispeaker.2", accessibilityDescription: "MusicBrainz Explorer Bridge")
+            fallback?.isTemplate = true
+            button.image = fallback
+            return
+        }
+
+        let size = NSSize(width: 22, height: 22)
+        let sourceRect = NSRect(x: 159, y: 112, width: 706, height: 800)
+        let destination = NSRect(x: 3.3, y: 2.25, width: 15.4, height: 17.5)
+        func makeIcon(color: NSColor?, isTemplate: Bool) -> NSImage {
+            let image = NSImage(size: size)
+            image.lockFocus()
+            source.draw(in: destination, from: sourceRect, operation: .sourceOver, fraction: 1)
+            if let color = color {
+                color.setFill()
+                NSRect(origin: .zero, size: size).fill(using: .sourceIn)
+            }
+            image.unlockFocus()
+            image.isTemplate = isTemplate
+            return image
+        }
+        idleIcon = makeIcon(color: nil, isTemplate: true)
+        runningIcon = makeIcon(color: .systemBlue, isTemplate: false)
+        button.image = idleIcon
+    }
+
+    private func updateStatusIcon(running: Bool) {
+        statusItem.button?.image = running ? (runningIcon ?? idleIcon) : idleIcon
+    }
+
     private func updateRendererMenuTitle() {
         let address = UserDefaults.standard.string(forKey: "rendererIP") ?? ""
         rendererMenuItem.title = address.isEmpty ? "Renderer IP: Automatic…" : "Renderer IP: \(address)…"
+    }
+
+    private func showRendererRows(_ titles: [String]) {
+        guard let menu = statusItem?.menu, let heading = detectedHeading else { return }
+        for item in detectedRows { menu.removeItem(item) }
+        detectedRows.removeAll()
+        let headingIndex = menu.index(of: heading)
+        guard headingIndex >= 0 else { return }
+        for (offset, title) in titles.enumerated() {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.insertItem(item, at: headingIndex + 1 + offset)
+            detectedRows.append(item)
+        }
+    }
+
+    private func refreshRenderers() {
+        guard rendererTask == nil, let process = bridgeProcess,
+              process.isRunning, !isStopping,
+              let url = URL(string: "http://127.0.0.1:9181/renderers") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 15
+        let generation = rendererGeneration
+        let task = URLSession.shared.dataTask(with: request) { [weak self, weak process] data, response, _ in
+            DispatchQueue.main.async {
+                guard let self = self, self.rendererGeneration == generation else { return }
+                self.rendererTask = nil
+                guard let process = process, self.bridgeProcess === process,
+                      !self.isStopping else { return }
+                guard (response as? HTTPURLResponse)?.statusCode == 200,
+                      let data = data,
+                      let list = try? JSONDecoder().decode(RendererList.self, from: data) else {
+                    self.showRendererRows(["Renderer search unavailable"])
+                    return
+                }
+                let renderers = list.renderers.sorted {
+                    $0.friendlyName.localizedStandardCompare($1.friendlyName) == .orderedAscending
+                }
+                let titles = renderers.map { renderer in
+                    let name = renderer.friendlyName.isEmpty ? "UPnP renderer" : renderer.friendlyName
+                    return renderer.address.isEmpty ? name : "\(name) — \(renderer.address)"
+                }
+                self.showRendererRows(titles.isEmpty ? ["No UPnP renderer found"] : titles)
+            }
+        }
+        rendererTask = task
+        task.resume()
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        refreshRenderers()
     }
 
     private func validRendererIP(_ value: String) -> Bool {
@@ -146,9 +242,14 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
                           self.bridgeProcess === process else { return }
                     self.bridgeProcess = nil
                     self.isStopping = false
+                    self.rendererGeneration += 1
+                    self.rendererTask?.cancel()
+                    self.rendererTask = nil
                     try? self.logHandle?.close()
                     self.logHandle = nil
                     self.statusMenuItem.title = "Bridge stopped"
+                    self.updateStatusIcon(running: false)
+                    self.showRendererRows(["Bridge stopped"])
                     self.updateMenuActions()
                     if self.restartAfterStop {
                         self.restartAfterStop = false
@@ -159,9 +260,12 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
             try process.run()
             bridgeProcess = process
             statusMenuItem.title = "Bridge starting…"
+            updateStatusIcon(running: false)
+            showRendererRows(["Searching for renderers…"])
             updateMenuActions()
         } catch {
             statusMenuItem.title = "Bridge could not start"
+            updateStatusIcon(running: false)
             appendLog("Launcher error: \(error.localizedDescription)\n")
             try? logHandle?.close()
             logHandle = nil
@@ -173,6 +277,11 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
         guard let process = bridgeProcess, process.isRunning, !isStopping else { return }
         isStopping = true
         statusMenuItem.title = "Bridge stopping…"
+        updateStatusIcon(running: false)
+        rendererGeneration += 1
+        rendererTask?.cancel()
+        rendererTask = nil
+        showRendererRows(["Bridge stopped"])
         updateMenuActions()
         process.terminate()
     }
@@ -191,7 +300,10 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
             let healthy = (response as? HTTPURLResponse)?.statusCode == 200
             DispatchQueue.main.async {
                 guard let self = self, self.bridgeProcess === process, !self.isStopping else { return }
+                let wasHealthy = self.statusMenuItem.title == "Bridge running"
                 self.statusMenuItem.title = healthy ? "Bridge running" : "Bridge unavailable"
+                self.updateStatusIcon(running: healthy)
+                if healthy && !wasHealthy { self.refreshRenderers() }
             }
         }.resume()
     }
@@ -217,6 +329,7 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         healthTimer?.invalidate()
+        rendererTask?.cancel()
         restartAfterStop = false
         if bridgeProcess?.isRunning == true { bridgeProcess?.terminate() }
     }
