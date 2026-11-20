@@ -481,14 +481,15 @@
         bit-perfect output cannot be guaranteed.
       </p>
       <div class="note">
-        UPnP network-renderer output is under development and is planned for an upcoming release. System audio
-        is the supported playback output in version 1.5.0.
+        For Navidrome playback, UPnP network-renderer output is available through the
+        <a href="https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.0">MusicBrainz Explorer Bridge</a>.
+        The Mac app includes a local copy of Explorer for straightforward UPnP control.
       </div>
       <p>
-        The planned bridge can run either as a native macOS helper at <code>http://127.0.0.1:9181</code> or as
-        an always-on Docker service on an Umbrel/Raspberry Pi. An Umbrel bridge uses a private Tailscale Serve
-        HTTPS address for browser control; the renderer still receives the ordinary local Navidrome URL and
-        never needs Tailscale.
+        The Bridge can run as a native macOS helper at <code>http://127.0.0.1:9181</code> or as an always-on
+        Docker service on an Umbrel/Raspberry Pi. Open Explorer from the Mac app's menu for local playback.
+        To control an Umbrel bridge from the published HTTPS website, use a private Tailscale Serve HTTPS
+        address. The renderer itself does not need Tailscale.
       </p>
     </section>
 
@@ -518,7 +519,7 @@
         <li>Files must already be tagged correctly with MusicBrainz Picard.</li>
         <li>Persistent local-folder access depends on browser support and permission policy.</li>
         <li>Remote Navidrome connections require HTTPS.</li>
-        <li>UPnP network-renderer output is still under development.</li>
+        <li>UPnP output requires Navidrome and a Bridge on a network that can reach the renderer.</li>
       </ul>
     </section>
 
