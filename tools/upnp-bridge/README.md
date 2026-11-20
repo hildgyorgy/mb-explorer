@@ -44,9 +44,9 @@ Navidrome; otherwise the bridge relays it. The Mac must remain awake while the r
 item can open the Explorer, show the diagnostic log, stop or start the bridge,
 or quit the app.
 
-The local test DMG is ad-hoc signed. A public download must instead be signed
-with a **Developer ID Application** certificate, submitted with `notarytool`,
-and stapled before release.
+The public 0.2.0 DMG is signed with a **Developer ID Application** certificate,
+notarized by Apple, and stapled. Running the build script without
+`CODESIGN_IDENTITY` creates an ad-hoc signed DMG for local testing only.
 
 ## Run from source
 
