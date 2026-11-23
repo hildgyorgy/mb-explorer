@@ -155,6 +155,58 @@ async function request(name, params = {}) {
   return requestAt(profile.baseUrl, name, params);
 }
 
+function endpointCandidates(targetProfile) {
+  return [
+    targetProfile.homeBaseUrl ? { kind: "local", url: targetProfile.homeBaseUrl } : null,
+    { kind: "remote", url: targetProfile.remoteBaseUrl },
+  ].filter(Boolean).filter(
+    (item, index, items) => items.findIndex((candidate) => candidate.url.toString() === item.url.toString()) === index
+  );
+}
+
+async function firstReachableEndpoint(targetProfile) {
+  let endpointError = null;
+  for (const candidate of endpointCandidates(targetProfile)) {
+    try {
+      const ping = await requestAt(candidate.url, "ping", {}, 2500);
+      if (ping.openSubsonic !== true || String(ping.type || "").toLowerCase() !== "navidrome") {
+        throw new Error("This server did not identify itself as Navidrome with OpenSubsonic support.");
+      }
+      return candidate;
+    } catch (error) {
+      endpointError = error;
+    }
+  }
+  throw endpointError || new Error("Navidrome is not reachable.");
+}
+
+function refreshMappedPlaybackUrls() {
+  const tracks = new Set();
+  [...catalog, ...albumsByRelease.values()].forEach((album) => {
+    (album?.tracks || []).forEach((track) => tracks.add(track));
+  });
+  tracksByRelease.forEach((byRecording) => {
+    byRecording.forEach((matches) => matches.forEach((track) => tracks.add(track)));
+  });
+  tracks.forEach((track) => {
+    track.playbackUrl = streamUrl(track.providerItemId);
+    track.rendererPlaybackUrl = rendererStreamUrl(track.providerItemId);
+  });
+}
+
+function persistActiveEndpoint() {
+  const saved = savedConnection();
+  if (!saved || !profile) return;
+  try {
+    localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify({
+      ...saved,
+      baseUrl: profile.baseUrl.toString(),
+      remoteBaseUrl: profile.remoteBaseUrl.toString(),
+      homeBaseUrl: profile.homeBaseUrl?.toString() || "",
+    }));
+  } catch (error) { /* storage may be unavailable */ }
+}
+
 function albumFormat(album) {
   return [...new Set((album?.song || []).map((song) => String(song.suffix || "").toUpperCase()).filter(Boolean))].join("/");
 }
@@ -254,7 +306,7 @@ export function getNavidromeStatus() {
   if (navidromeError) return navidromeError;
   if (!profile) return "Navidrome is not connected.";
   const route = profile.activeEndpoint === "local" ? " via the local network" : " via the remote address";
-  return `Connected to ${profile.name}${route}. ${catalog.length.toLocaleString()} identified albums.`;
+  return `Connected to ${profile.name}${route}. ${catalog.length.toLocaleString()} identified releases among ${albumInventory.length.toLocaleString()} albums.`;
 }
 
 export function getNavidromeSummary() {
@@ -270,6 +322,28 @@ export function getNavidromeSummary() {
     identifiedAlbumCount: catalog.length,
     totalAlbumCount: albumInventory.length,
   };
+}
+
+export async function refreshNavidromeEndpoint() {
+  if (!profile) return { changed: false, activeEndpoint: "" };
+  try {
+    const endpoint = await firstReachableEndpoint(profile);
+    const changed = profile.activeEndpoint !== endpoint.kind || profile.baseUrl.toString() !== endpoint.url.toString();
+    profile.baseUrl = endpoint.url;
+    profile.activeEndpoint = endpoint.kind;
+    navidromeError = "";
+    if (changed) {
+      refreshMappedPlaybackUrls();
+      persistActiveEndpoint();
+      notifyLibraryState();
+    }
+    return { changed, activeEndpoint: endpoint.kind };
+  } catch (error) {
+    profile.activeEndpoint = "";
+    navidromeError = error?.message || "Navidrome is not reachable.";
+    notifyLibraryState();
+    throw error;
+  }
 }
 
 export async function connectNavidrome({ name, serverUrl, homeServerUrl = "", username, userPassword = "", savedToken = "", savedSalt = "" }) {
@@ -296,26 +370,9 @@ export async function connectNavidrome({ name, serverUrl, homeServerUrl = "", us
   tracksByRelease = new Map();
 
   try {
-    const endpoints = [
-      nextProfile.homeBaseUrl ? { kind: "local", url: nextProfile.homeBaseUrl } : null,
-      { kind: "remote", url: nextProfile.remoteBaseUrl },
-    ].filter(Boolean).filter((item, index, items) => items.findIndex((candidate) => candidate.url.toString() === item.url.toString()) === index);
-    let endpointError = null;
-    for (const candidate of endpoints) {
-      try {
-        const ping = await requestAt(candidate.url, "ping", {}, 2500);
-        if (ping.openSubsonic !== true || String(ping.type || "").toLowerCase() !== "navidrome") {
-          throw new Error("This server did not identify itself as Navidrome with OpenSubsonic support.");
-        }
-        nextProfile.baseUrl = candidate.url;
-        nextProfile.activeEndpoint = candidate.kind;
-        endpointError = null;
-        break;
-      } catch (error) {
-        endpointError = error;
-      }
-    }
-    if (!nextProfile.activeEndpoint) throw endpointError || new Error("Navidrome is not reachable.");
+    const endpoint = await firstReachableEndpoint(nextProfile);
+    nextProfile.baseUrl = endpoint.url;
+    nextProfile.activeEndpoint = endpoint.kind;
 
     for (let offset = 0; ; offset += PAGE_SIZE) {
       const result = await request("getAlbumList2", { type: "alphabeticalByName", offset, size: PAGE_SIZE });
@@ -395,6 +452,25 @@ export function bindNavidromePicker(root = document) {
     if (homeActive) homeActive.hidden = !bothConfigured || summary.activeEndpoint !== "local";
     if (remoteActive) remoteActive.hidden = !bothConfigured || summary.activeEndpoint !== "remote";
   };
+  let endpointRefreshTask = null;
+  const refreshEndpointWhenOpen = () => {
+    if (!dialog.open || !profile || endpointRefreshTask) return endpointRefreshTask;
+    status.classList.remove("err");
+    status.textContent = "Checking Navidrome connections…";
+    endpointRefreshTask = refreshNavidromeEndpoint().then(() => {
+      status.textContent = getNavidromeStatus();
+      updateActiveBadges();
+    }).catch((error) => {
+      status.textContent = error?.message || "Navidrome is not reachable.";
+      status.classList.add("err");
+      updateActiveBadges();
+    }).finally(() => { endpointRefreshTask = null; });
+    return endpointRefreshTask;
+  };
+  const openObserver = new MutationObserver(() => {
+    if (dialog.open) refreshEndpointWhenOpen();
+  });
+  openObserver.observe(dialog, { attributes: true, attributeFilter: ["open"] });
   let saved = savedConnection();
   if (saved) {
     form.elements.name.value = saved.name || "";
@@ -456,13 +532,12 @@ export function bindNavidromePicker(root = document) {
         savedSalt: enteredPassword ? "" : saved?.salt,
       });
       status.classList.remove("err");
-      status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
+      status.textContent = getNavidromeStatus();
       if (inventoryButton) inventoryButton.hidden = false;
       if (disconnectButton) disconnectButton.hidden = false;
       saved = savedConnection();
       form.elements.password.value = "";
       updateActiveBadges();
-      dialog.querySelector(".search-help-close")?.click();
     } catch (error) {
       navidromeError = error?.message || "Could not connect to Navidrome.";
       status.textContent = navidromeError;
@@ -490,7 +565,7 @@ export function bindNavidromePicker(root = document) {
       savedSalt: saved.salt,
     }).then((result) => {
       status.classList.remove("err");
-      status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
+      status.textContent = getNavidromeStatus();
       if (inventoryButton) inventoryButton.hidden = false;
       if (disconnectButton) disconnectButton.hidden = false;
       updateActiveBadges();
