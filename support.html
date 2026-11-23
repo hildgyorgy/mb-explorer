@@ -369,7 +369,7 @@
         <li>Select the pulsing logo, open <strong>Source</strong>, then choose <strong>Navidrome</strong>.</li>
         <li>Select <strong>Connect or configure</strong>.</li>
         <li>Enter a display name, your username and password, and at least the remote/Tailscale HTTPS URL.</li>
-        <li>Optionally enter the server's local-network URL as well. The Explorer prefers it when reachable and falls back to the remote address elsewhere.</li>
+        <li>For UPnP playback, optionally enter the server's local-network URL. The Bridge gives this address to the renderer for a direct Navidrome stream; if it is left blank, the Bridge relays the remote stream.</li>
         <li>Select <strong>Connect</strong> and wait while the Explorer reads the album catalogue.</li>
       </ol>
       <p>
@@ -508,8 +508,8 @@
         <li>Your music files and <code>library.json</code> are not uploaded by the app.</li>
         <li>Browser indexing and playback happen locally on your device.</li>
         <li>A supported browser may retain the selected local-folder handle; it controls whether access must be approved again.</li>
-        <li>Navidrome catalogue and browser-playback requests use the local-network URL when the browser can reach it, otherwise the remote/Tailscale URL.</li>
-        <li>When configured, the local-network URL is also handed directly to a UPnP renderer.</li>
+        <li>The hosted Explorer uses the remote/Tailscale URL for Navidrome catalogue and browser-playback requests.</li>
+        <li>When configured, the local-network URL is handed directly to a UPnP renderer; the renderer, not the browser, retrieves that stream.</li>
         <li>The Navidrome profile and a reusable salted login token are stored locally; the original password is not stored.</li>
         <li>Music metadata and cover art are requested from MusicBrainz and the Cover Art Archive.</li>
       </ul>
