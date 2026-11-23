@@ -1193,6 +1193,20 @@ a:hover {
   color: var(--muted);
 }
 
+.navidrome-address-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.navidrome-active-badge {
+  color: var(--system-blue);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .navidrome-form input {
   width: 100%;
   box-sizing: border-box;

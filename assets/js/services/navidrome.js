@@ -127,18 +127,32 @@ function endpoint(name, baseUrl = profile.baseUrl) {
   return `${base}/rest/${name}.view`;
 }
 
-async function request(name, params = {}) {
+async function requestAt(baseUrl, name, params = {}, timeoutMs = 0) {
   const body = new URLSearchParams({ ...authParameters(), ...params });
-  const response = await fetch(endpoint(name), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" },
-    body,
-  });
-  if (!response.ok) throw new Error(`Navidrome returned HTTP ${response.status}.`);
-  const payload = await response.json();
-  const result = payload?.["subsonic-response"];
-  if (!result || result.status !== "ok") throw new Error(result?.error?.message || "Navidrome rejected the request.");
-  return result;
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timeout = controller ? window.setTimeout(() => controller.abort(), timeoutMs) : 0;
+  try {
+    const response = await fetch(endpoint(name, baseUrl), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" },
+      body,
+      signal: controller?.signal,
+    });
+    if (!response.ok) throw new Error(`Navidrome returned HTTP ${response.status}.`);
+    const payload = await response.json();
+    const result = payload?.["subsonic-response"];
+    if (!result || result.status !== "ok") throw new Error(result?.error?.message || "Navidrome rejected the request.");
+    return result;
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Navidrome connection timed out.");
+    throw error;
+  } finally {
+    if (timeout) window.clearTimeout(timeout);
+  }
+}
+
+async function request(name, params = {}) {
+  return requestAt(profile.baseUrl, name, params);
 }
 
 function albumFormat(album) {
@@ -239,7 +253,8 @@ export function isNavidromeConnected() {
 export function getNavidromeStatus() {
   if (navidromeError) return navidromeError;
   if (!profile) return "Navidrome is not connected.";
-  return `Connected to ${profile.name}. ${catalog.length.toLocaleString()} identified albums.`;
+  const route = profile.activeEndpoint === "local" ? " via the local network" : " via the remote address";
+  return `Connected to ${profile.name}${route}. ${catalog.length.toLocaleString()} identified albums.`;
 }
 
 export function getNavidromeSummary() {
@@ -248,19 +263,23 @@ export function getNavidromeSummary() {
     connected: !!profile,
     remembered: !!remembered,
     name: profile?.name || remembered?.name || "Navidrome",
-    serverUrl: profile?.baseUrl?.toString() || remembered?.baseUrl || "",
+    serverUrl: profile?.remoteBaseUrl?.toString() || remembered?.remoteBaseUrl || remembered?.baseUrl || "",
     homeServerUrl: profile?.homeBaseUrl?.toString() || remembered?.homeBaseUrl || "",
     username: profile?.username || remembered?.username || "",
+    activeEndpoint: profile?.activeEndpoint || "",
     identifiedAlbumCount: catalog.length,
     totalAlbumCount: albumInventory.length,
   };
 }
 
 export async function connectNavidrome({ name, serverUrl, homeServerUrl = "", username, userPassword = "", savedToken = "", savedSalt = "" }) {
+  const remoteBaseUrl = normalizeBaseUrl(serverUrl);
   const nextProfile = {
     name: String(name || "").trim() || "Navidrome",
-    baseUrl: normalizeBaseUrl(serverUrl),
+    baseUrl: remoteBaseUrl,
+    remoteBaseUrl,
     homeBaseUrl: normalizeHomeBaseUrl(homeServerUrl),
+    activeEndpoint: "",
     username: String(username || "").trim(),
   };
   if (!nextProfile.username) throw new Error("A Navidrome username is required.");
@@ -277,10 +296,26 @@ export async function connectNavidrome({ name, serverUrl, homeServerUrl = "", us
   tracksByRelease = new Map();
 
   try {
-    const ping = await request("ping");
-    if (ping.openSubsonic !== true || String(ping.type || "").toLowerCase() !== "navidrome") {
-      throw new Error("This server did not identify itself as Navidrome with OpenSubsonic support.");
+    const endpoints = [
+      nextProfile.homeBaseUrl ? { kind: "local", url: nextProfile.homeBaseUrl } : null,
+      { kind: "remote", url: nextProfile.remoteBaseUrl },
+    ].filter(Boolean).filter((item, index, items) => items.findIndex((candidate) => candidate.url.toString() === item.url.toString()) === index);
+    let endpointError = null;
+    for (const candidate of endpoints) {
+      try {
+        const ping = await requestAt(candidate.url, "ping", {}, 2500);
+        if (ping.openSubsonic !== true || String(ping.type || "").toLowerCase() !== "navidrome") {
+          throw new Error("This server did not identify itself as Navidrome with OpenSubsonic support.");
+        }
+        nextProfile.baseUrl = candidate.url;
+        nextProfile.activeEndpoint = candidate.kind;
+        endpointError = null;
+        break;
+      } catch (error) {
+        endpointError = error;
+      }
     }
+    if (!nextProfile.activeEndpoint) throw endpointError || new Error("Navidrome is not reachable.");
 
     for (let offset = 0; ; offset += PAGE_SIZE) {
       const result = await request("getAlbumList2", { type: "alphabeticalByName", offset, size: PAGE_SIZE });
@@ -301,6 +336,7 @@ export async function connectNavidrome({ name, serverUrl, homeServerUrl = "", us
       localStorage.setItem(SAVED_PROFILE_KEY, JSON.stringify({
         name: nextProfile.name,
         baseUrl: nextProfile.baseUrl.toString(),
+        remoteBaseUrl: nextProfile.remoteBaseUrl.toString(),
         homeBaseUrl: nextProfile.homeBaseUrl?.toString() || "",
         username: nextProfile.username,
         token: authToken,
@@ -349,18 +385,27 @@ export function bindNavidromePicker(root = document) {
   const inventoryDialog = root.getElementById("navidromeInventoryDialog");
   const identifiedList = root.getElementById("navidromeIdentifiedAlbums");
   const untaggedList = root.getElementById("navidromeUntaggedAlbums");
+  const homeActive = root.getElementById("navidromeHomeActive");
+  const remoteActive = root.getElementById("navidromeRemoteActive");
   if (!dialog || !form || !status || form.dataset.bound === "1") return;
   form.dataset.bound = "1";
+  const updateActiveBadges = () => {
+    const summary = getNavidromeSummary();
+    const bothConfigured = !!summary.homeServerUrl && !!summary.serverUrl;
+    if (homeActive) homeActive.hidden = !bothConfigured || summary.activeEndpoint !== "local";
+    if (remoteActive) remoteActive.hidden = !bothConfigured || summary.activeEndpoint !== "remote";
+  };
   let saved = savedConnection();
   if (saved) {
     form.elements.name.value = saved.name || "";
-    form.elements.serverUrl.value = saved.baseUrl || "";
+    form.elements.serverUrl.value = saved.remoteBaseUrl || saved.baseUrl || "";
     form.elements.homeServerUrl.value = saved.homeBaseUrl || "";
     form.elements.username.value = saved.username || "";
   }
   status.textContent = getNavidromeStatus();
   if (inventoryButton) inventoryButton.hidden = !profile;
   if (disconnectButton) disconnectButton.hidden = !profile;
+  updateActiveBadges();
   inventoryButton?.addEventListener("click", () => {
     if (!profile || !inventoryDialog || !identifiedList || !untaggedList) return;
     const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
@@ -396,6 +441,8 @@ export function bindNavidromePicker(root = document) {
     event.preventDefault();
     const submit = form.querySelector("button[type=submit]");
     submit.disabled = true; status.textContent = "Connecting to Navidrome…";
+    if (homeActive) homeActive.hidden = true;
+    if (remoteActive) remoteActive.hidden = true;
     try {
       const data = new FormData(form);
       const enteredPassword = String(data.get("password") || "");
@@ -414,6 +461,7 @@ export function bindNavidromePicker(root = document) {
       if (disconnectButton) disconnectButton.hidden = false;
       saved = savedConnection();
       form.elements.password.value = "";
+      updateActiveBadges();
       dialog.querySelector(".search-help-close")?.click();
     } catch (error) {
       navidromeError = error?.message || "Could not connect to Navidrome.";
@@ -427,6 +475,7 @@ export function bindNavidromePicker(root = document) {
     status.textContent = getNavidromeStatus();
     disconnectButton.hidden = true;
     if (inventoryButton) inventoryButton.hidden = true;
+    updateActiveBadges();
     dialog.querySelector(".search-help-close")?.click();
   });
 
@@ -434,7 +483,7 @@ export function bindNavidromePicker(root = document) {
     status.textContent = "Restoring the saved Navidrome connection…";
     connectNavidrome({
       name: saved.name,
-      serverUrl: saved.baseUrl,
+      serverUrl: saved.remoteBaseUrl || saved.baseUrl,
       homeServerUrl: saved.homeBaseUrl || "",
       username: saved.username,
       savedToken: saved.token,
@@ -444,6 +493,7 @@ export function bindNavidromePicker(root = document) {
       status.textContent = `Connected to ${result.profile.name}. ${result.albumCount.toLocaleString()} identified releases among ${result.totalAlbumCount.toLocaleString()} albums.`;
       if (inventoryButton) inventoryButton.hidden = false;
       if (disconnectButton) disconnectButton.hidden = false;
+      updateActiveBadges();
     }).catch((error) => {
       navidromeError = error?.message || "Could not restore Navidrome.";
       status.textContent = navidromeError;

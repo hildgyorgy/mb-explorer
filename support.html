@@ -368,14 +368,15 @@
       <ol>
         <li>Select the pulsing logo, open <strong>Source</strong>, then choose <strong>Navidrome</strong>.</li>
         <li>Select <strong>Connect or configure</strong>.</li>
-        <li>Enter a display name, the remote/Tailscale HTTPS URL, your username and password.</li>
-        <li>Optionally enter the server's home-network URL for direct UPnP playback.</li>
+        <li>Enter a display name, your username and password, and at least the remote/Tailscale HTTPS URL.</li>
+        <li>Optionally enter the server's local-network URL as well. The Explorer prefers it when reachable and falls back to the remote address elsewhere.</li>
         <li>Select <strong>Connect</strong> and wait while the Explorer reads the album catalogue.</li>
       </ol>
       <p>
         The server profile and a reusable salted OpenSubsonic login token are remembered on this device; the
         original password is not stored. If Navidrome was the selected source, the Explorer reconnects
-        automatically after reopening or reloading the page.
+        automatically after reopening or reloading the page. When both addresses are configured, a blue
+        <strong>ACTIVE</strong> label shows which connection is currently in use.
       </p>
 
       <h3>Check MusicBrainz compatibility</h3>
@@ -434,9 +435,10 @@
       <details>
         <summary>Navidrome does not connect</summary>
         <p>
-          Check the remote/Tailscale URL and credentials. The browser-facing URL must use HTTPS, and the server
-          must identify itself as Navidrome with OpenSubsonic support. The optional UPnP home-network URL may use
-          HTTP when it has a local hostname or private IP address.
+          Check both configured URLs and the credentials. The remote/Tailscale URL must use HTTPS, and the server
+          must identify itself as Navidrome with OpenSubsonic support. The optional local-network URL may use HTTP
+          when it has a local hostname or private IP address. If the browser cannot reach that address, the
+          Explorer automatically tries the remote URL.
         </p>
       </details>
 
@@ -488,7 +490,7 @@
       <p>
         The currently downloadable Bridge is an Apple Silicon Mac app. Open Explorer from its menu to use the
         local address <code>http://127.0.0.1:9181</code> for UPnP playback. The Mac and renderer must share a
-        local network; Navidrome must be reachable from the Mac or through its configured home-network URL.
+        local network; Navidrome must be reachable from the Mac or through its configured local-network URL.
       </p>
     </section>
 
@@ -499,8 +501,8 @@
         <li>Your music files and <code>library.json</code> are not uploaded by the app.</li>
         <li>Browser indexing and playback happen locally on your device.</li>
         <li>A supported browser may retain the selected local-folder handle; it controls whether access must be approved again.</li>
-        <li>Navidrome catalogue and browser-playback requests go directly to the remote/Tailscale URL you configure.</li>
-        <li>When configured, the separate home-network URL is used only for streams handed to a UPnP renderer.</li>
+        <li>Navidrome catalogue and browser-playback requests use the local-network URL when the browser can reach it, otherwise the remote/Tailscale URL.</li>
+        <li>When configured, the local-network URL is also handed directly to a UPnP renderer.</li>
         <li>The Navidrome profile and a reusable salted login token are stored locally; the original password is not stored.</li>
         <li>Music metadata and cover art are requested from MusicBrainz and the Cover Art Archive.</li>
       </ul>

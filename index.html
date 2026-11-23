@@ -130,9 +130,15 @@
     </div>
     <form id="navidromeForm" class="navidrome-form">
       <label>Name <input name="name" type="text" placeholder="Home Navidrome"></label>
-      <label>Remote / Tailscale URL <input name="serverUrl" type="url" placeholder="https://music.example.com" required></label>
-      <label>Home network URL for UPnP <input name="homeServerUrl" type="url" placeholder="http://192.168.1.10:4533"></label>
-      <p class="sheet-note muted">The browser uses the HTTPS address above. When set, a UPnP renderer receives the home-network address directly; otherwise the local bridge relays the stream.</p>
+      <label class="navidrome-address-field">
+        <span class="navidrome-address-heading"><span>Local network URL</span><span class="navidrome-active-badge" id="navidromeHomeActive" aria-label="Active connection" hidden>ACTIVE</span></span>
+        <input name="homeServerUrl" type="url" placeholder="http://192.168.1.10:4533">
+      </label>
+      <label class="navidrome-address-field">
+        <span class="navidrome-address-heading"><span>Remote / Tailscale URL</span><span class="navidrome-active-badge" id="navidromeRemoteActive" aria-label="Active connection" hidden>ACTIVE</span></span>
+        <input name="serverUrl" type="url" placeholder="https://music.example.com" required>
+      </label>
+      <p class="sheet-note muted">The Explorer prefers the local address when it is reachable and otherwise uses the remote address. A UPnP renderer always receives the local address directly; without one, the Bridge relays the stream.</p>
       <label>Username <input name="username" type="text" autocomplete="username" required></label>
       <label>Password <input name="password" type="password" autocomplete="current-password" placeholder="Use saved connection if left blank"></label>
       <p class="local-library-status muted" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>

@@ -27,7 +27,7 @@ calm navigation and an optional local playback layer.
 - Classical works and movements presented as structured track groups
 - Light and dark themes with responsive desktop and mobile layouts
 - Local-library results integrated into the same MusicBrainz search
-- Local-folder and Navidrome/OpenSubsonic library sources, with separate remote and home-network Navidrome addresses
+- Local-folder and Navidrome/OpenSubsonic library sources, with automatic local-network/remote Navidrome selection
 - System-audio playback and optional UPnP network-renderer output through the Mac Bridge app
 - MusicBrainz compatibility reports for connected libraries
 - Minimal playback controls that stay available while browsing other releases
