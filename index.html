@@ -115,7 +115,18 @@
     <label class="bridge-url-field">Bridge URL
       <input id="bridgeUrl" type="url" spellcheck="false" placeholder="http://127.0.0.1:9181">
     </label>
-    <p class="sheet-note bridge-url-note">For a local Mac setup, open Explorer from the Bridge app's menu and use http://127.0.0.1:9181. The published HTTPS website needs an HTTPS Bridge URL, such as Tailscale Serve.</p>
+    <p class="sheet-note bridge-url-note">Opened Explorer from the Bridge menu? Use <code>http://127.0.0.1:9181</code>. The hosted Explorer needs an HTTPS Bridge URL.</p>
+    <details class="bridge-serve-help">
+      <summary>Set up Tailscale Serve for the hosted Explorer</summary>
+      <ol>
+        <li>Start the Bridge and connect Tailscale on the same Mac.</li>
+        <li>On that Mac, run this command in Terminal:
+          <pre><code>/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg http://127.0.0.1:9181</code></pre>
+        </li>
+        <li>Paste the HTTPS URL printed by Tailscale into <strong>Bridge URL</strong>, then select <strong>Discover UPnP renderers</strong>.</li>
+      </ol>
+      <p>Keep the browser device on the same Tailscale network and the renderer on the Bridge’s local network.</p>
+    </details>
     <div class="output-options" id="outputOptions"></div>
     <button class="pill discover-renderers" id="discoverRenderers" type="button">Discover UPnP renderers</button>
     <p class="local-library-status muted" id="rendererStatus" role="status" aria-live="polite">MusicBrainz Explorer Bridge is not connected.</p>

@@ -1066,7 +1066,38 @@ a:hover {
 }
 
 .bridge-url-note {
-  margin: 7px 0 16px;
+  margin: 7px 0 10px;
+}
+
+.bridge-serve-help {
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.bridge-serve-help summary {
+  color: var(--link);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.bridge-serve-help ol {
+  margin: 10px 0;
+  padding-inline-start: 20px;
+}
+
+.bridge-serve-help pre {
+  margin: 6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bridge-serve-help p {
+  margin: 0;
 }
 
 .sheet-note {
