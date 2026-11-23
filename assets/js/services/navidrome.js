@@ -463,6 +463,7 @@ export function bindNavidromePicker(root = document) {
     const bothConfigured = !!summary.homeServerUrl && !!summary.serverUrl;
     if (homeActive) homeActive.hidden = !bothConfigured || summary.activeEndpoint !== "local";
     if (remoteActive) remoteActive.hidden = !bothConfigured || summary.activeEndpoint !== "remote";
+    status.classList.toggle("is-connected", !!profile);
   };
   let endpointRefreshTask = null;
   const refreshEndpointWhenOpen = () => {
@@ -485,7 +486,6 @@ export function bindNavidromePicker(root = document) {
   openObserver.observe(dialog, { attributes: true, attributeFilter: ["open"] });
   let saved = savedConnection();
   if (saved) {
-    form.elements.name.value = saved.name || "";
     form.elements.serverUrl.value = saved.remoteBaseUrl || saved.baseUrl || "";
     form.elements.homeServerUrl.value = saved.homeBaseUrl || "";
     form.elements.username.value = saved.username || "";
@@ -535,7 +535,6 @@ export function bindNavidromePicker(root = document) {
       const data = new FormData(form);
       const enteredPassword = String(data.get("password") || "");
       const result = await connectNavidrome({
-        name: data.get("name"),
         serverUrl: data.get("serverUrl"),
         homeServerUrl: data.get("homeServerUrl"),
         username: data.get("username"),
@@ -569,7 +568,6 @@ export function bindNavidromePicker(root = document) {
   if (getActiveLibrarySource() === "navidrome" && saved?.token && saved?.salt) {
     status.textContent = "Restoring the saved Navidrome connection…";
     connectNavidrome({
-      name: saved.name,
       serverUrl: saved.remoteBaseUrl || saved.baseUrl,
       homeServerUrl: saved.homeBaseUrl || "",
       username: saved.username,

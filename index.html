@@ -125,26 +125,47 @@
   <dialog class="search-help-dialog" id="navidromeDialog" aria-labelledby="navidromeTitle"
     data-return-dialog="searchHelpDialog">
     <div class="search-help-head">
-      <h2 id="navidromeTitle">Connect Navidrome</h2>
+      <h2 id="navidromeTitle">Navidrome</h2>
       <button class="search-help-close" type="button" aria-label="Close">×</button>
     </div>
     <form id="navidromeForm" class="navidrome-form">
-      <label>Name <input name="name" type="text" placeholder="Home Navidrome"></label>
-      <label class="navidrome-address-field">
-        <span class="navidrome-address-heading"><span>Local network URL for UPnP</span><span class="navidrome-active-badge" id="navidromeHomeActive" aria-label="Active connection" hidden>ACTIVE</span></span>
-        <input name="homeServerUrl" type="url" placeholder="http://192.168.1.10:4533" aria-describedby="homeServerUrlHelp">
-      </label>
-      <p class="sheet-note muted" id="homeServerUrlHelp">Used for UPnP playback. The Bridge gives this address to the renderer, which streams directly from Navidrome. If left blank, the Bridge relays the remote stream.</p>
-      <label class="navidrome-address-field">
-        <span class="navidrome-address-heading"><span>Remote / Tailscale URL</span><span class="navidrome-active-badge" id="navidromeRemoteActive" aria-label="Active connection" hidden>ACTIVE</span></span>
-        <input name="serverUrl" type="url" placeholder="https://music.example.com" required>
-      </label>
-      <label>Username <input name="username" type="text" autocomplete="username" required></label>
-      <label>Password <input name="password" type="password" autocomplete="current-password" placeholder="Use saved connection if left blank"></label>
-      <p class="local-library-status muted" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
-      <button class="onboarding-action" type="submit"><span class="onboarding-copy"><strong>Connect</strong><span>This device remembers a reusable login token; your original password is not stored.</span></span><span class="onboarding-arrow" aria-hidden="true">→</span></button>
-      <button class="pill navidrome-disconnect" id="disconnectNavidrome" type="button" hidden>Disconnect Navidrome</button>
-      <button class="pill sheet-secondary-action" id="showNavidromeInventory" type="button" hidden>Show MusicBrainz compatibility report</button>
+      <fieldset class="navidrome-section navidrome-server-section">
+        <legend>Server</legend>
+        <div class="navidrome-address-field">
+          <div class="navidrome-address-heading">
+            <div><label for="navidromeServerUrl">Navidrome URL</label> <small id="remoteServerUrlHelp">(HTTPS or Tailscale address used by Explorer)</small></div>
+            <span class="navidrome-active-badge" id="navidromeRemoteActive" aria-label="Active connection" hidden>Active</span>
+          </div>
+          <input id="navidromeServerUrl" name="serverUrl" type="url" placeholder="https://music.example.com" required aria-describedby="remoteServerUrlHelp">
+        </div>
+        <div class="navidrome-address-field">
+          <div class="navidrome-address-heading">
+            <div><label for="navidromeHomeServerUrl">Local URL for UPnP</label> <small id="homeServerUrlHelp">(Optional · passed to the renderer for direct playback)</small></div>
+            <span class="navidrome-active-badge" id="navidromeHomeActive" aria-label="Active connection" hidden>Active</span>
+          </div>
+          <input id="navidromeHomeServerUrl" name="homeServerUrl" type="url" placeholder="http://192.168.1.10:4533" aria-describedby="homeServerUrlHelp">
+        </div>
+      </fieldset>
+
+      <fieldset class="navidrome-section navidrome-account-section">
+        <legend>Account</legend>
+        <div class="navidrome-field-grid">
+          <label>Username <input name="username" type="text" autocomplete="username" required></label>
+          <label>Password <input name="password" type="password" autocomplete="current-password" placeholder="Saved login"></label>
+        </div>
+        <p class="navidrome-section-note">Leave the password empty to reuse the saved login. Your password is never stored.</p>
+      </fieldset>
+
+      <div class="navidrome-section">
+        <div class="navidrome-action-row">
+          <button class="navidrome-connect" type="submit">Save &amp; Connect</button>
+          <button class="navidrome-disconnect" id="disconnectNavidrome" type="button" hidden>Disconnect</button>
+        </div>
+        <p class="navidrome-status-card" id="navidromeStatus" role="status" aria-live="polite">Navidrome is not connected.</p>
+        <button class="navidrome-report-action" id="showNavidromeInventory" type="button" hidden>
+          <span>MusicBrainz compatibility report</span><span aria-hidden="true">→</span>
+        </button>
+      </div>
     </form>
   </dialog>
 

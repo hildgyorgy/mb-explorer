@@ -926,7 +926,6 @@ a:hover {
 }
 
 .sheet-secondary-action,
-.navidrome-disconnect,
 .discover-renderers {
   min-height: 38px;
   margin-top: 16px;
@@ -1182,15 +1181,76 @@ a:hover {
 
 .navidrome-form {
   display: grid;
-  gap: 12px;
-  padding: 8px 0 0;
+  gap: 0;
 }
 
 .navidrome-form label {
   display: grid;
-  gap: 5px;
-  font-size: 0.78rem;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 560;
   color: var(--muted);
+}
+
+#navidromeDialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(calc(100vh - 44px), 780px);
+  padding: 28px 30px 30px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+#navidromeDialog::-webkit-scrollbar {
+  display: none;
+}
+
+#navidromeDialog .search-help-head {
+  margin-bottom: 22px;
+}
+
+#navidromeDialog .search-help-head h2 {
+  font-size: 19px;
+  font-weight: 680;
+  letter-spacing: -.02em;
+}
+
+.navidrome-section {
+  min-width: 0;
+  margin: 0;
+  padding: 20px 0 22px;
+  display: grid;
+  gap: 15px;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.navidrome-section:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.navidrome-section legend {
+  padding: 0;
+  color: var(--meta);
+  font-size: 10px;
+  font-weight: 720;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.navidrome-section-note,
+.navidrome-address-field small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.navidrome-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
 }
 
 .navidrome-address-heading {
@@ -1198,24 +1258,169 @@ a:hover {
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
+  font-size: 11px;
+}
+
+.navidrome-address-field {
+  display: grid;
+  gap: 7px;
+}
+
+.navidrome-address-heading label {
+  display: inline;
 }
 
 .navidrome-active-badge {
-  color: var(--system-blue);
-  font-size: 0.7rem;
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--system-blue);
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: .1em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .navidrome-form input {
   width: 100%;
   box-sizing: border-box;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--panel);
+  min-height: 42px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: var(--panel-2);
   color: var(--text);
-  padding: 9px 10px;
+  padding: 10px 12px;
   font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.navidrome-form input:focus {
+  border-color: color-mix(in srgb, var(--system-blue) 65%, transparent);
+  background: var(--panel);
+  outline: none;
+}
+
+.navidrome-form input::placeholder {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.navidrome-status-card {
+  position: relative;
+  min-height: 44px;
+  margin: 0;
+  padding: 12px 14px 12px 36px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  color: var(--muted);
+  background: var(--panel-2);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.navidrome-status-card::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  opacity: .55;
+}
+
+.navidrome-status-card.is-connected::before {
+  background: var(--system-blue);
+  opacity: 1;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--system-blue) 14%, transparent);
+}
+
+.navidrome-status-card.err {
+  color: var(--error, #d96c75);
+  border-color: color-mix(in srgb, currentColor 32%, var(--border));
+}
+
+.navidrome-status-card.err::before {
+  background: currentColor;
+  opacity: 1;
+}
+
+.navidrome-action-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 9px;
+}
+
+.navidrome-connect,
+.navidrome-disconnect {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.navidrome-connect {
+  border: 0;
+  color: #fff;
+  background: var(--system-blue);
+}
+
+.navidrome-connect:hover,
+.navidrome-connect:focus-visible {
+  filter: brightness(1.08);
+}
+
+.navidrome-connect:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.navidrome-disconnect {
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: transparent;
+}
+
+.navidrome-report-action {
+  width: 100%;
+  padding: 12px 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 580;
+  text-align: left;
+  cursor: pointer;
+}
+
+.navidrome-report-action span:last-child {
+  color: var(--system-blue);
+  font-size: 15px;
+}
+
+@media (max-width: 520px) {
+  #navidromeDialog {
+    padding: 25px 24px 26px;
+  }
+
+  .navidrome-field-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .renderer-probe {
