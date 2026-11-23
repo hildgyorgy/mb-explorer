@@ -22,6 +22,7 @@ from pathlib import Path
 
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 AVT_PREFIX = "urn:schemas-upnp-org:service:AVTransport:"
+BRIDGE_VERSION = "0.2.1"
 PORT = int(os.environ.get("MUSICARDS_BRIDGE_PORT", "9181"))
 HOST = os.environ.get("MUSICARDS_BRIDGE_HOST", "0.0.0.0")
 PARENT_PID = int(os.environ.get("MUSICARDS_BRIDGE_PARENT_PID", "0") or 0)
@@ -511,7 +512,7 @@ class Handler(BaseHTTPRequestHandler):
         source = STATE.proxy_source(token)
         if not source:
             return self.send_json(404, {"error": "stream token not found"})
-        headers = {"User-Agent": "MusicBrainz-Explorer-Bridge/0.1"}
+        headers = {"User-Agent": f"MusicBrainz-Explorer-Bridge/{BRIDGE_VERSION}"}
         if self.headers.get("Range"):
             headers["Range"] = self.headers["Range"]
         request = urllib.request.Request(
