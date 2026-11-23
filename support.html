@@ -379,6 +379,12 @@
         <strong>ACTIVE</strong> label shows which connection is currently in use. Opening the Navidrome settings
         checks both routes again, so the active connection follows the network currently available.
       </p>
+      <p>
+        The published Explorer uses HTTPS, so browsers cannot connect from it directly to a plain HTTP address
+        on the local network. In that case catalogue and system-audio playback use the remote/Tailscale HTTPS
+        address; the local address remains available to a UPnP renderer. Explorer opened from the Mac Bridge or
+        another local HTTP host can use the local address directly.
+      </p>
 
       <h3>Check MusicBrainz compatibility</h3>
       <p>

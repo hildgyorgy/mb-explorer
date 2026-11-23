@@ -92,4 +92,23 @@ async function connectWith(fetchImplementation) {
   assert.ok(requests.some((url) => url.startsWith("https://music.example.com/")));
 }
 
+{
+  globalThis.location = { protocol: "https:" };
+  const requests = [];
+  const result = await connectWith(async (url) => {
+    const address = String(url);
+    requests.push(address);
+    if (address.includes("/rest/ping.view")) return ok({ openSubsonic: true, type: "navidrome" });
+    return ok({ albumList2: { album: [] } });
+  });
+  assert.equal(result.profile.activeEndpoint, "remote");
+  assert.ok(requests.every((url) => url.startsWith("https://music.example.com/")));
+
+  await assert.rejects(
+    connectWith(async () => { throw new TypeError("Load failed"); }),
+    /HTTPS page cannot connect directly to the HTTP local address/
+  );
+  delete globalThis.location;
+}
+
 console.log("Navidrome endpoint selection regressions passed.");

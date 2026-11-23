@@ -165,8 +165,13 @@ function endpointCandidates(targetProfile) {
 }
 
 async function firstReachableEndpoint(targetProfile) {
-  let endpointError = null;
+  const errors = [];
+  let localHttpBlocked = false;
   for (const candidate of endpointCandidates(targetProfile)) {
+    if (candidate.kind === "local" && candidate.url.protocol === "http:" && globalThis.location?.protocol === "https:") {
+      localHttpBlocked = true;
+      continue;
+    }
     try {
       const ping = await requestAt(candidate.url, "ping", {}, 2500);
       if (ping.openSubsonic !== true || String(ping.type || "").toLowerCase() !== "navidrome") {
@@ -174,10 +179,17 @@ async function firstReachableEndpoint(targetProfile) {
       }
       return candidate;
     } catch (error) {
-      endpointError = error;
+      errors.push({ kind: candidate.kind, error });
     }
   }
-  throw endpointError || new Error("Navidrome is not reachable.");
+  const remoteError = errors.find((item) => item.kind === "remote")?.error;
+  if (localHttpBlocked) {
+    throw new Error("The Remote / Tailscale URL could not be reached. This HTTPS page cannot connect directly to the HTTP local address. Check that Tailscale Serve is running, then try again.");
+  }
+  if (remoteError?.message && remoteError.message !== "Load failed" && remoteError.message !== "Failed to fetch") {
+    throw remoteError;
+  }
+  throw new Error("Navidrome could not be reached at either configured address.");
 }
 
 function refreshMappedPlaybackUrls() {
