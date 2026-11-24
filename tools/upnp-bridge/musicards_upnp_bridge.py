@@ -23,7 +23,7 @@ from pathlib import Path
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 AVT_PREFIX = "urn:schemas-upnp-org:service:AVTransport:"
 RENDERING_PREFIX = "urn:schemas-upnp-org:service:RenderingControl:"
-BRIDGE_VERSION = "0.2.3"
+BRIDGE_VERSION = "0.2.4"
 PORT = int(os.environ.get("MUSICARDS_BRIDGE_PORT", "9181"))
 HOST = os.environ.get("MUSICARDS_BRIDGE_HOST", "0.0.0.0")
 PARENT_PID = int(os.environ.get("MUSICARDS_BRIDGE_PARENT_PID", "0") or 0)

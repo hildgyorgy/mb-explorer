@@ -296,6 +296,14 @@ function ensureMiniPlayer() {
       <button class="mini-player-button" type="button" data-player-action="previous" aria-label="Previous track">${ICONS.previous}</button>
       <button class="mini-player-button mini-player-toggle" type="button" data-player-action="toggle" aria-label="Play">${ICONS.play}</button>
       <button class="mini-player-button" type="button" data-player-action="next" aria-label="Next track">${ICONS.next}</button>
+      <div class="mini-player-volume" hidden>
+        <button class="mini-player-button mini-player-volume-button" type="button" aria-label="UPnP volume" aria-controls="miniPlayerVolume" aria-expanded="false" title="UPnP volume">${ICONS.volume}</button>
+        <div class="mini-player-volume-popover" id="miniPlayerVolume" role="group" aria-label="UPnP volume" hidden>
+          <div class="mini-player-volume-heading"><span>Volume</span><span class="mini-player-volume-value">—</span></div>
+          <input class="mini-player-volume-range" type="range" orient="vertical" min="0" max="100" value="0" step="1" aria-label="UPnP renderer volume" aria-orientation="vertical" disabled>
+          <span class="mini-player-volume-status" role="status" aria-live="polite"></span>
+        </div>
+      </div>
     </div>
     <div class="mini-player-main">
       <span class="mini-player-title"></span>
@@ -306,14 +314,6 @@ function ensureMiniPlayer() {
       </div>
       <span class="mini-player-artist"></span>
       <span class="mini-player-output"></span>
-    </div>
-    <div class="mini-player-volume" hidden>
-      <button class="mini-player-button mini-player-volume-button" type="button" aria-label="UPnP volume" aria-controls="miniPlayerVolume" aria-expanded="false" title="UPnP volume">${ICONS.volume}</button>
-      <div class="mini-player-volume-popover" id="miniPlayerVolume" role="group" aria-label="UPnP volume" hidden>
-        <div class="mini-player-volume-heading"><span>Volume</span><span class="mini-player-volume-value">—</span></div>
-        <input class="mini-player-volume-range" type="range" min="0" max="100" value="0" step="1" aria-label="UPnP renderer volume" disabled>
-        <span class="mini-player-volume-status" role="status" aria-live="polite"></span>
-      </div>
     </div>`;
 
   miniPlayer.addEventListener("click", async (event) => {
