@@ -1,4 +1,9 @@
-export const APP_VERSION = "1.5.5";
+export const APP_VERSION = "1.5.6";
+
+export function isPhoneBrowser() {
+  return navigator.userAgentData?.mobile === true ||
+    /iPhone|iPod|Android.*Mobile/i.test(navigator.userAgent || "");
+}
 
 export const CONFIG = Object.freeze({
   // Responsive breakpoint (keep in sync with CSS @media)

@@ -1,4 +1,5 @@
 import { getActiveLibrarySource, setActiveLibrarySource } from "../core/librarySource.js";
+import { isPhoneBrowser } from "../core/config.js";
 import { matchNavidromeTrack, positiveInteger } from "./navidromeMatching.mjs";
 
 const API_VERSION = "1.16.1";
@@ -458,6 +459,14 @@ export function bindNavidromePicker(root = document) {
   const remoteActive = root.getElementById("navidromeRemoteActive");
   if (!dialog || !form || !status || form.dataset.bound === "1") return;
   form.dataset.bound = "1";
+  const phone = isPhoneBrowser();
+  const homeUrlField = form.elements.homeServerUrl;
+  homeUrlField.disabled = phone;
+  homeUrlField.closest(".navidrome-address-field")?.classList.toggle("is-disabled", phone);
+  if (phone) {
+    const help = root.getElementById("homeServerUrlHelp");
+    if (help) help.textContent = "(Available for UPnP on desktop)";
+  }
   const updateActiveBadges = () => {
     const summary = getNavidromeSummary();
     const bothConfigured = !!summary.homeServerUrl && !!summary.serverUrl;
@@ -536,7 +545,7 @@ export function bindNavidromePicker(root = document) {
       const enteredPassword = String(data.get("password") || "");
       const result = await connectNavidrome({
         serverUrl: data.get("serverUrl"),
-        homeServerUrl: data.get("homeServerUrl"),
+        homeServerUrl: phone ? "" : data.get("homeServerUrl"),
         username: data.get("username"),
         userPassword: enteredPassword,
         savedToken: enteredPassword ? "" : saved?.token,
@@ -569,7 +578,7 @@ export function bindNavidromePicker(root = document) {
     status.textContent = "Restoring the saved Navidrome connection…";
     connectNavidrome({
       serverUrl: saved.remoteBaseUrl || saved.baseUrl,
-      homeServerUrl: saved.homeBaseUrl || "",
+      homeServerUrl: phone ? "" : saved.homeBaseUrl || "",
       username: saved.username,
       savedToken: saved.token,
       savedSalt: saved.salt,
