@@ -2,8 +2,6 @@
 
 # MusicBrainz Explorer
 
-_version 1.5.1_
-
 A small, framework-free web app for exploring MusicBrainz releases and playing
 the matching files from your own music library.
 
@@ -162,11 +160,13 @@ The release header shows how many tracks are available locally, for example
 
 ## Privacy and local access
 
-- There is no application backend.
+- The hosted webapp has no application backend; UPnP playback uses the optional
+  local Bridge app.
 - Music files are not uploaded to the project or to MusicBrainz.
 - Browser indexing runs locally on your device.
 - Playback uses the original file selected from your Music folder.
-- Folder access lasts only for the current page session.
+- Folder access is controlled by the browser; supported browsers can remember
+  the selected folder and may ask for permission again.
 
 The app itself is hosted as static files on GitHub Pages. MusicBrainz metadata
 and cover art are requested from their respective public services.
@@ -179,7 +179,7 @@ the original local file and does not deliberately transcode it.
 The mini-player can display source properties stored in the index, for example:
 
 ```text
-SOURCE ALAC · 16-bit / 44.1 kHz • STEREO
+SOURCE LOCAL FILE • ALAC · 16-bit / 44.1 kHz • STEREO
 ```
 
 Because the browser, operating-system mixer and selected audio device remain
