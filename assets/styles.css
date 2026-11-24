@@ -1,4 +1,4 @@
-/* MusicBrainz Explorer v1.5.5 */
+/* MusicBrainz Explorer v1.5.6 */
 
 html {
   width: 100%;
@@ -1286,6 +1286,10 @@ a:hover {
 .navidrome-address-field {
   display: grid;
   gap: 7px;
+}
+
+.navidrome-address-field.is-disabled {
+  opacity: .45;
 }
 
 .navidrome-address-heading label {

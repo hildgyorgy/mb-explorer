@@ -5,6 +5,7 @@ import {
 } from "../core/librarySource.js";
 import { getLocalLibrarySummary } from "../services/localLibrary.js";
 import { getNavidromeSummary } from "../services/navidrome.js";
+import { isPhoneBrowser } from "../core/config.js";
 import {
   discoverBridgeRenderers,
   disconnectRenderer,
@@ -57,7 +58,8 @@ export function refreshPlaybackSetup(root = document) {
   const local = getLocalLibrarySummary();
   const navidrome = getNavidromeSummary();
   const renderer = getRenderer();
-  const activeRenderer = source === "navidrome" ? renderer : null;
+  const phone = isPhoneBrowser();
+  const activeRenderer = source === "navidrome" && !phone ? renderer : null;
   const compatibility = root.getElementById("homeCompatibilityStatus");
   const compatibilityLabel = root.getElementById("homeCompatibilityLabel");
   const compatibilityState = compatibilitySummary(source, local, navidrome);
@@ -75,8 +77,10 @@ export function refreshPlaybackSetup(root = document) {
   if (localChoice) localChoice.title = source === "local" ? "Open local folder settings" : "Use the local music folder";
   if (navidromeChoice) navidromeChoice.title = source === "navidrome" ? "Open Navidrome settings" : "Use Navidrome";
   if (rendererChoice) {
-    rendererChoice.disabled = source !== "navidrome";
-    rendererChoice.title = source !== "navidrome"
+    rendererChoice.disabled = phone || source !== "navidrome";
+    rendererChoice.title = phone
+      ? "UPnP control is available in the desktop webapp"
+      : source !== "navidrome"
       ? "UPnP output requires the Navidrome source"
       : renderer ? `Configure ${rendererName(renderer)}` : "Choose a UPnP renderer";
   }
@@ -136,7 +140,7 @@ function bindPersistentSetup(root) {
   };
 
   const restoreOutput = () => {
-    if (restoreTask || getRenderer() || getActiveLibrarySource() !== "navidrome") return restoreTask;
+    if (isPhoneBrowser() || restoreTask || getRenderer() || getActiveLibrarySource() !== "navidrome") return restoreTask;
     const saved = getSavedRendererPreference();
     if (!saved) return null;
     if (bridgeUrlInput) bridgeUrlInput.value = saved.bridgeUrl;
@@ -233,7 +237,7 @@ export function bindPlaybackSetup(root = document) {
   if (rendererChoice?.dataset.bound !== "1") {
     rendererChoice.dataset.bound = "1";
     rendererChoice.addEventListener("click", () => {
-      if (getActiveLibrarySource() !== "navidrome") return;
+      if (isPhoneBrowser() || getActiveLibrarySource() !== "navidrome") return;
       refreshPlaybackSetup(root);
       openSettings(outputDialog, rendererChoice);
     });
