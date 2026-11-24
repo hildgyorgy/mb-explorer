@@ -16,7 +16,7 @@ active queue.
 ## macOS user instructions
 
 Download the Apple Silicon Mac app from the
-[Bridge 0.2.1 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.1).
+[Bridge 0.2.3 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.3).
 
 1. Open `MusicBrainz-Explorer-Bridge-…-macOS-….dmg`.
 2. Drag **MusicBrainz Explorer Bridge** into **Applications**.
@@ -39,13 +39,17 @@ Download the Apple Silicon Mac app from the
    **Discover UPnP renderers**.
 7. Select the renderer and play a Navidrome-backed release.
 
+While UPnP playback is active, the speaker button at the right end of the
+player opens the renderer's volume control. It uses the device's own supported
+volume range; system-audio playback continues to use the Mac's volume controls.
+
 The Mac, renderer and Navidrome server must be reachable on the relevant local
 network. With a Home network URL the renderer fetches audio directly from
 Navidrome; otherwise the bridge relays it. The Mac must remain awake while the renderer is playing. The menu-bar
 item can open the Explorer, show the diagnostic log, stop or start the bridge,
 or quit the app.
 
-The public 0.2.1 DMG is signed with a **Developer ID Application** certificate,
+The public 0.2.3 DMG is signed with a **Developer ID Application** certificate,
 notarized by Apple, and stapled. Running the build script without
 `CODESIGN_IDENTITY` creates an ad-hoc signed DMG for local testing only.
 

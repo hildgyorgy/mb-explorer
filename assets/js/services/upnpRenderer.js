@@ -214,6 +214,27 @@ export async function getRendererState() {
   return response.json();
 }
 
+export async function getRendererVolume(target) {
+  if (target?.mode !== "bridge" || !target.renderingControlUrl) {
+    throw new Error("This UPnP renderer has no volume control.");
+  }
+  const response = await fetch(`${target.bridgeUrl}/renderers/${encodeURIComponent(target.id)}/volume`);
+  if (!response.ok) throw new Error(`Volume returned HTTP ${response.status}.`);
+  return response.json();
+}
+
+export async function setRendererVolume(target, volume) {
+  if (target?.mode !== "bridge" || !target.renderingControlUrl) {
+    throw new Error("This UPnP renderer has no volume control.");
+  }
+  const response = await fetch(`${target.bridgeUrl}/renderers/${encodeURIComponent(target.id)}/volume`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ volume }),
+  });
+  if (!response.ok) throw new Error(`Volume change returned HTTP ${response.status}.`);
+  return response.json();
+}
+
 export async function stopBridgeRenderer(target) {
   if (target?.mode !== "bridge") return;
   const response = await fetch(`${target.bridgeUrl}/renderers/${encodeURIComponent(target.id)}/stop`, {

@@ -1,3 +1,4 @@
+import io
 import sys
 import threading
 import time
@@ -79,6 +80,51 @@ class DiscoveryTests(unittest.TestCase):
     def test_seek_clock_carries_minutes_into_hours(self):
         self.assertEqual(bridge.upnp_clock(4500), "1:15:00")
         self.assertEqual(bridge.upnp_clock(-10), "0:00:00")
+
+    def test_renderer_volume_service_and_device_range(self):
+        description = b'''<root><device><UDN>uuid:speaker</UDN><serviceList>
+          <service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+            <controlURL>/transport</controlURL></service>
+          <service><serviceType>urn:schemas-upnp-org:service:RenderingControl:2</serviceType>
+            <controlURL>/rendering</controlURL><SCPDURL>/rendering.xml</SCPDURL></service>
+        </serviceList></device></root>'''
+        scpd = b'''<scpd><serviceStateTable><stateVariable><name>Volume</name>
+          <allowedValueRange><minimum>0</minimum><maximum>80</maximum></allowedValueRange>
+        </stateVariable></serviceStateTable></scpd>'''
+        with patch.object(bridge.urllib.request, "urlopen", return_value=io.BytesIO(description)):
+            renderer = bridge.renderer_from_description("http://192.168.0.185/device.xml")
+        self.assertEqual(renderer["renderingControlUrl"], "http://192.168.0.185/rendering")
+        self.assertEqual(renderer["renderingControlScpdUrl"], "http://192.168.0.185/rendering.xml")
+        with patch.object(bridge.urllib.request, "urlopen", return_value=io.BytesIO(scpd)):
+            self.assertEqual(bridge.volume_range(renderer), (0, 80))
+
+    def test_volume_uses_rendering_control_and_rejects_out_of_range_values(self):
+        renderer = {"id": "uuid:speaker", "serviceType": "urn:schemas-upnp-org:service:AVTransport:1",
+                    "controlUrl": "http://192.168.0.185/transport",
+                    "renderingControlServiceType": "urn:schemas-upnp-org:service:RenderingControl:2",
+                    "renderingControlUrl": "http://192.168.0.185/rendering"}
+        handler = bridge.Handler.__new__(bridge.Handler)
+        handler.client_address = ("127.0.0.1", 12345)
+        handler.headers = {"Host": "127.0.0.1:9181"}
+        handler.path = "/renderers/uuid%3Aspeaker/volume"
+        replies = []
+        handler.send_json = lambda status, payload: replies.append((status, payload))
+        handler.read_json = lambda: {"volume": 32}
+        with patch.object(bridge.STATE, "get", return_value=renderer), \
+             patch.object(bridge.STATE, "volume_range", return_value=(0, 80)), \
+             patch.object(bridge, "soap_text", return_value={"CurrentVolume": "30"}) as read, \
+             patch.object(bridge, "soap_call") as write:
+            handler.do_GET()
+            self.assertEqual(replies[-1], (200, {"volume": 30, "min": 0, "max": 80}))
+            self.assertEqual(read.call_args.args[0]["serviceType"], renderer["renderingControlServiceType"])
+            handler.do_POST()
+            self.assertEqual(replies[-1], (200, {"volume": 32, "min": 0, "max": 80}))
+            self.assertEqual(write.call_args.args[1], "SetVolume")
+            self.assertIn(("DesiredVolume", 32), write.call_args.args[2])
+            handler.read_json = lambda: {"volume": 81}
+            handler.do_POST()
+            self.assertEqual(replies[-1][0], 400)
+            self.assertEqual(write.call_count, 1)
 
 
 if __name__ == "__main__":
