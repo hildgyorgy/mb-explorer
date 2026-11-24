@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { getActiveLibrarySource, onLibrarySourceChange } from "../core/librarySource.js";
-import { getRenderer, setCurrentAndNext, setNext, playRenderer, callRenderer, getRendererState, stopBridgeRenderer, didlMetadata } from "../services/upnpRenderer.js";
+import { getRenderer, setCurrentAndNext, setNext, playRenderer, callRenderer, getRendererState, getRendererVolume, setRendererVolume, stopBridgeRenderer, didlMetadata } from "../services/upnpRenderer.js";
 
 const audio = new Audio();
 let objectUrl = "";
@@ -24,6 +24,8 @@ let remoteSessionId = 0;
 let pendingRemoteStop = Promise.resolve();
 let remoteCommandInFlight = Promise.resolve();
 let remoteSeekPreview = null;
+let volumeRequestId = 0;
+let volumeLevel = null;
 
 function playbackSource(entry) {
   const localTrack = entry?.localTrack;
@@ -71,7 +73,58 @@ const ICONS = {
   play: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`,
   pause: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM14 5h4v14h-4z"/></svg>`,
   next: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5v14M6 6l8 6-8 6V6z"/></svg>`,
+  volume: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3zm12.5-1.5-1.4 1.4a4.5 4.5 0 0 1 0 6.2l1.4 1.4a6.5 6.5 0 0 0 0-9zm2.8-2.8-1.4 1.4a8.5 8.5 0 0 1 0 11.8l1.4 1.4a10.5 10.5 0 0 0 0-14.6z"/></svg>`,
 };
+
+function volumePercent(value, minimum, maximum) {
+  return Math.round((value - minimum) * 100 / (maximum - minimum));
+}
+
+function closeRendererVolume() {
+  volumeRequestId += 1;
+  volumeLevel = null;
+  const control = miniPlayer?.querySelector(".mini-player-volume");
+  if (!control) return;
+  control.querySelector(".mini-player-volume-popover").hidden = true;
+  control.querySelector(".mini-player-volume-button").setAttribute("aria-expanded", "false");
+}
+
+async function openRendererVolume() {
+  const target = getRenderer();
+  if (target?.mode !== "bridge" || !target.renderingControlUrl) return;
+  const control = miniPlayer.querySelector(".mini-player-volume");
+  const slider = control.querySelector(".mini-player-volume-range");
+  const status = control.querySelector(".mini-player-volume-status");
+  const popover = control.querySelector(".mini-player-volume-popover");
+  const requestId = ++volumeRequestId;
+  popover.hidden = false;
+  control.querySelector(".mini-player-volume-button").setAttribute("aria-expanded", "true");
+  slider.disabled = true;
+  status.textContent = "Loading volume…";
+  try {
+    const result = await getRendererVolume(target);
+    if (requestId !== volumeRequestId) return;
+    const minimum = Number(result.min);
+    const maximum = Number(result.max);
+    const current = Number(result.volume);
+    if (!Number.isInteger(minimum) || !Number.isInteger(maximum) ||
+        !Number.isInteger(current) || minimum >= maximum) {
+      throw new Error("Invalid volume response");
+    }
+    slider.min = String(minimum);
+    slider.max = String(maximum);
+    slider.value = String(Math.max(minimum, Math.min(maximum, current)));
+    volumeLevel = Number(slider.value);
+    slider.disabled = false;
+    control.querySelector(".mini-player-volume-value").textContent =
+      `${volumePercent(volumeLevel, minimum, maximum)}%`;
+    status.textContent = "";
+  } catch (error) {
+    if (requestId !== volumeRequestId) return;
+    status.textContent = "Volume unavailable";
+    console.warn("Could not read UPnP volume:", error);
+  }
+}
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -253,6 +306,14 @@ function ensureMiniPlayer() {
       </div>
       <span class="mini-player-artist"></span>
       <span class="mini-player-output"></span>
+    </div>
+    <div class="mini-player-volume" hidden>
+      <button class="mini-player-button mini-player-volume-button" type="button" aria-label="UPnP volume" aria-controls="miniPlayerVolume" aria-expanded="false" title="UPnP volume">${ICONS.volume}</button>
+      <div class="mini-player-volume-popover" id="miniPlayerVolume" role="group" aria-label="UPnP volume" hidden>
+        <div class="mini-player-volume-heading"><span>Volume</span><span class="mini-player-volume-value">—</span></div>
+        <input class="mini-player-volume-range" type="range" min="0" max="100" value="0" step="1" aria-label="UPnP renderer volume" disabled>
+        <span class="mini-player-volume-status" role="status" aria-live="polite"></span>
+      </div>
     </div>`;
 
   miniPlayer.addEventListener("click", async (event) => {
@@ -294,6 +355,48 @@ function ensureMiniPlayer() {
     if (sessionId === remoteSessionId) syncMiniPlayer();
   });
 
+  const volumeControl = miniPlayer.querySelector(".mini-player-volume");
+  volumeControl.querySelector(".mini-player-volume-button").addEventListener("click", () => {
+    const popover = volumeControl.querySelector(".mini-player-volume-popover");
+    if (popover.hidden) openRendererVolume();
+    else closeRendererVolume();
+  });
+  const volumeSlider = volumeControl.querySelector(".mini-player-volume-range");
+  volumeSlider.addEventListener("input", () => {
+    volumeControl.querySelector(".mini-player-volume-value").textContent =
+      `${volumePercent(Number(volumeSlider.value), Number(volumeSlider.min), Number(volumeSlider.max))}%`;
+  });
+  volumeSlider.addEventListener("change", async () => {
+    const target = getRenderer();
+    if (target?.mode !== "bridge" || !target.renderingControlUrl) return;
+    const requested = Number(volumeSlider.value);
+    const previous = volumeLevel;
+    const requestId = volumeRequestId;
+    const status = volumeControl.querySelector(".mini-player-volume-status");
+    volumeSlider.disabled = true;
+    try {
+      await setRendererVolume(target, requested);
+      if (requestId !== volumeRequestId) return;
+      volumeLevel = requested;
+      status.textContent = "";
+    } catch (error) {
+      if (requestId !== volumeRequestId) return;
+      if (previous !== null) volumeSlider.value = String(previous);
+      volumeControl.querySelector(".mini-player-volume-value").textContent =
+        `${volumePercent(Number(volumeSlider.value), Number(volumeSlider.min), Number(volumeSlider.max))}%`;
+      status.textContent = "Volume change failed";
+      console.warn("Could not change UPnP volume:", error);
+    } finally {
+      if (requestId === volumeRequestId) volumeSlider.disabled = false;
+    }
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!volumeControl.contains(event.target)) closeRendererVolume();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeRendererVolume();
+  });
+
   document.body.appendChild(miniPlayer);
   return miniPlayer;
 }
@@ -311,7 +414,15 @@ function syncMiniPlayer() {
 
   player.hidden = !shouldShowPlayer;
   document.body.classList.toggle("has-mini-player", shouldShowPlayer);
-  if (!shouldShowPlayer) return;
+  if (!shouldShowPlayer) {
+    closeRendererVolume();
+    return;
+  }
+
+  const volumeControl = player.querySelector(".mini-player-volume");
+  const volumeAvailable = hasTrack && remotePlaybackEnabled(entry) && !!getRenderer()?.renderingControlUrl;
+  if (!volumeAvailable && !volumeControl.hidden) closeRendererVolume();
+  volumeControl.hidden = !volumeAvailable;
 
   const isPlaying = hasTrack && (remotePlaybackEnabled(entry) ? remotePlaying : (!audio.paused && !audio.ended));
   const toggle = player.querySelector(".mini-player-toggle");

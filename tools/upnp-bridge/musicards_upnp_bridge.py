@@ -22,7 +22,8 @@ from pathlib import Path
 
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 AVT_PREFIX = "urn:schemas-upnp-org:service:AVTransport:"
-BRIDGE_VERSION = "0.2.2"
+RENDERING_PREFIX = "urn:schemas-upnp-org:service:RenderingControl:"
+BRIDGE_VERSION = "0.2.3"
 PORT = int(os.environ.get("MUSICARDS_BRIDGE_PORT", "9181"))
 HOST = os.environ.get("MUSICARDS_BRIDGE_HOST", "0.0.0.0")
 PARENT_PID = int(os.environ.get("MUSICARDS_BRIDGE_PARENT_PID", "0") or 0)
@@ -187,23 +188,62 @@ def discover():
 def renderer_from_description(url, address=""):
     with urllib.request.urlopen(url, timeout=5) as response:
         root = ET.fromstring(response.read())
-    services = []
+    transport_services = []
+    rendering_services = []
     for service in root.iter():
         if service.tag.rsplit("}", 1)[-1] != "service":
             continue
         service_type = xml_value(service, "serviceType")
         control = xml_value(service, "controlURL")
         if service_type.startswith(AVT_PREFIX) and control:
-            services.append((service_type, urllib.parse.urljoin(url, control)))
-    if not services:
+            transport_services.append((service_type, urllib.parse.urljoin(url, control)))
+        if service_type.startswith(RENDERING_PREFIX) and control:
+            scpd = xml_value(service, "SCPDURL")
+            rendering_services.append((service_type, urllib.parse.urljoin(url, control),
+                                       urllib.parse.urljoin(url, scpd) if scpd else ""))
+    if not transport_services:
         raise RuntimeError("AVTransport service not found")
-    service_type, control_url = max(services, key=lambda x: x[0].rsplit(":", 1)[-1])
-    return {"id": xml_value(root, "UDN") or url,
+    service_type, control_url = max(transport_services, key=lambda x: int(x[0].rsplit(":", 1)[-1]))
+    result = {"id": xml_value(root, "UDN") or url,
             "descriptionUrl": url, "address": address,
             "friendlyName": xml_value(root, "friendlyName") or "UPnP renderer",
             "manufacturer": xml_value(root, "manufacturer"),
             "modelName": xml_value(root, "modelName"),
             "serviceType": service_type, "controlUrl": control_url}
+    if rendering_services:
+        rendering_type, rendering_url, scpd_url = max(
+            rendering_services, key=lambda x: int(x[0].rsplit(":", 1)[-1]))
+        result.update(renderingControlServiceType=rendering_type,
+                      renderingControlUrl=rendering_url,
+                      renderingControlScpdUrl=scpd_url)
+    return result
+
+
+def rendering_service(renderer):
+    if not renderer.get("renderingControlUrl"):
+        raise ValueError("Renderer volume control is unavailable")
+    return {**renderer, "serviceType": renderer["renderingControlServiceType"],
+            "controlUrl": renderer["renderingControlUrl"]}
+
+
+def volume_range(renderer):
+    scpd_url = renderer.get("renderingControlScpdUrl")
+    if not scpd_url:
+        return 0, 100
+    try:
+        with urllib.request.urlopen(scpd_url, timeout=3) as response:
+            root = ET.fromstring(response.read())
+        for variable in root.iter():
+            if variable.tag.rsplit("}", 1)[-1] == "stateVariable" and xml_value(variable, "name") == "Volume":
+                for child in variable:
+                    if child.tag.rsplit("}", 1)[-1] == "allowedValueRange":
+                        minimum = int(xml_value(child, "minimum") or 0)
+                        maximum = int(xml_value(child, "maximum") or 100)
+                        if 0 <= minimum < maximum:
+                            return minimum, maximum
+    except (OSError, ValueError, ET.ParseError):
+        pass
+    return 0, 100
 
 
 def local_address_for(renderer):
@@ -253,6 +293,17 @@ class BridgeState:
         self.proxy_sources = {}
         self.proxy_uris = {}
         self.proxy_originals = {}
+        self.volume_ranges = {}
+
+    def volume_range(self, renderer):
+        renderer_id = renderer["id"]
+        with self.lock:
+            cached = self.volume_ranges.get(renderer_id)
+        if cached:
+            return cached
+        limits = volume_range(renderer)
+        with self.lock:
+            return self.volume_ranges.setdefault(renderer_id, limits)
 
     def refresh(self):
         if not self.scan_lock.acquire(blocking=False):
@@ -562,6 +613,15 @@ class Handler(BaseHTTPRequestHandler):
                 media = soap_text(renderer, "GetMediaInfo", [("InstanceID", 0)], ("CurrentURI",))
                 media["CurrentURI"] = STATE.original_uri(media.get("CurrentURI", ""))
                 return self.send_json(200, {**transport, **position, **media})
+            if len(parts) == 3 and parts[0] == "renderers" and parts[2] == "volume":
+                renderer = STATE.get(urllib.parse.unquote(parts[1]))
+                if not renderer.get("renderingControlUrl"):
+                    return self.send_json(404, {"error": "renderer volume control unavailable"})
+                service = rendering_service(renderer)
+                minimum, maximum = STATE.volume_range(renderer)
+                current = int(soap_text(service, "GetVolume", [("InstanceID", 0),
+                    ("Channel", "Master")], ("CurrentVolume",))["CurrentVolume"])
+                return self.send_json(200, {"volume": current, "min": minimum, "max": maximum})
             return self.send_json(404, {"error": "not found"})
         except Exception as error:
             self.send_json(500, {"error": str(error)})
@@ -624,6 +684,17 @@ class Handler(BaseHTTPRequestHandler):
                 target = upnp_clock(body.get("seconds", 0))
                 soap_call(renderer, "Seek", [("InstanceID", 0), ("Unit", "REL_TIME"), ("Target", target)])
                 return self.send_json(200, {"ok": True})
+            if action == "volume":
+                if not renderer.get("renderingControlUrl"):
+                    return self.send_json(404, {"error": "renderer volume control unavailable"})
+                service = rendering_service(renderer)
+                minimum, maximum = STATE.volume_range(renderer)
+                level = body.get("volume")
+                if type(level) is not int or not minimum <= level <= maximum:
+                    return self.send_json(400, {"error": f"volume must be between {minimum} and {maximum}"})
+                soap_call(service, "SetVolume", [("InstanceID", 0), ("Channel", "Master"),
+                    ("DesiredVolume", level)])
+                return self.send_json(200, {"volume": level, "min": minimum, "max": maximum})
             if action in {"play", "pause", "stop", "next", "previous"}:
                 names = {"play": ("Play", [("Speed", 1)]),
                          "pause": ("Pause", []), "stop": ("Stop", []),
