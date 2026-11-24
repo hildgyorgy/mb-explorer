@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.5.6";
+export const APP_VERSION = "1.5.7";
 
 export function isPhoneBrowser() {
   return navigator.userAgentData?.mobile === true ||
