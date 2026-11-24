@@ -1,4 +1,4 @@
-/* MusicBrainz Explorer v1.5.4 */
+/* MusicBrainz Explorer v1.5.5 */
 
 html {
   width: 100%;
@@ -202,15 +202,6 @@ a:hover {
   flex: 1;
   min-width: 0;
   position: relative;
-}
-
-.app-version-badge {
-  flex: 0 0 auto;
-  color: var(--meta);
-  font-size: 10px;
-  letter-spacing: .05em;
-  text-transform: none;
-  white-space: nowrap;
 }
 
 #omni {
@@ -2381,35 +2372,29 @@ body.has-mini-player {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
-  width: 86px;
-  padding: 12px 9px;
+  gap: 6px;
+  width: 34px;
+  padding: 10px 0;
   color: var(--text);
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 999px;
   box-shadow: 0 12px 34px rgba(5, 15, 35, .22);
   transform: translateX(-50%);
 }
 
-.mini-player-volume-heading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  font-size: 10px;
-  font-weight: 600;
-}
-
 .mini-player-volume-value {
   color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .mini-player-volume-range {
-  width: 24px;
-  height: 136px;
-  margin: 3px 0;
+  width: 22px;
+  height: 128px;
+  margin: 0;
   writing-mode: vertical-lr;
   direction: rtl;
   accent-color: var(--link);
@@ -2422,14 +2407,14 @@ body.has-mini-player {
 }
 
 .mini-player-volume-status {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-}
-
-.mini-player-volume-status:empty {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (max-width: 640px) {
@@ -2457,6 +2442,7 @@ body.has-mini-player {
 
   .mini-player-volume-popover {
     bottom: calc(100% + 13px);
+    width: 30px;
   }
 
   .mini-player-volume {

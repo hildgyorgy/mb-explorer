@@ -1,4 +1,4 @@
-export const APP_VERSION = "1.5.4";
+export const APP_VERSION = "1.5.5";
 
 export const CONFIG = Object.freeze({
   // Responsive breakpoint (keep in sync with CSS @media)

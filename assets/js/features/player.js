@@ -100,6 +100,7 @@ async function openRendererVolume() {
   popover.hidden = false;
   control.querySelector(".mini-player-volume-button").setAttribute("aria-expanded", "true");
   slider.disabled = true;
+  control.querySelector(".mini-player-volume-value").textContent = "—";
   status.textContent = "Loading volume…";
   try {
     const result = await getRendererVolume(target);
@@ -118,9 +119,11 @@ async function openRendererVolume() {
     slider.disabled = false;
     control.querySelector(".mini-player-volume-value").textContent =
       `${volumePercent(volumeLevel, minimum, maximum)}%`;
+    control.querySelector(".mini-player-volume-button").title = "UPnP volume";
     status.textContent = "";
   } catch (error) {
     if (requestId !== volumeRequestId) return;
+    control.querySelector(".mini-player-volume-button").title = "UPnP volume unavailable";
     status.textContent = "Volume unavailable";
     console.warn("Could not read UPnP volume:", error);
   }
@@ -169,6 +172,11 @@ function formatSourceQuality(track) {
   return [quality, channels].filter(Boolean).join(" • ");
 }
 
+function formatSource(track) {
+  const source = getActiveLibrarySource() === "navidrome" ? "NAVIDROME" : "LOCAL FILE";
+  return [source, formatSourceQuality(track)].filter(Boolean).join(" • ");
+}
+
 function formatArtistAlbum(entry) {
   const artist = entry?.artist || entry?.localTrack?.album?.artist_name ||
     entry?.localTrack?.track?.artist || "";
@@ -179,9 +187,9 @@ function formatArtistAlbum(entry) {
 
 function formatOutput(entry) {
   if (remotePlaybackEnabled(entry)) {
-    return getRenderer()?.friendlyName || "UPnP renderer";
+    return `UPNP • ${getRenderer()?.friendlyName || "Renderer"}`;
   }
-  return "System audio";
+  return "SYSTEM AUDIO";
 }
 
 /* ============================================================
@@ -299,7 +307,7 @@ function ensureMiniPlayer() {
       <div class="mini-player-volume" hidden>
         <button class="mini-player-button mini-player-volume-button" type="button" aria-label="UPnP volume" aria-controls="miniPlayerVolume" aria-expanded="false" title="UPnP volume">${ICONS.volume}</button>
         <div class="mini-player-volume-popover" id="miniPlayerVolume" role="group" aria-label="UPnP volume" hidden>
-          <div class="mini-player-volume-heading"><span>Volume</span><span class="mini-player-volume-value">—</span></div>
+          <span class="mini-player-volume-value">—</span>
           <input class="mini-player-volume-range" type="range" orient="vertical" min="0" max="100" value="0" step="1" aria-label="UPnP renderer volume" aria-orientation="vertical" disabled>
           <span class="mini-player-volume-status" role="status" aria-live="polite"></span>
         </div>
@@ -457,7 +465,7 @@ function syncMiniPlayer() {
   player.querySelector(".mini-player-artist").textContent =
     formatArtistAlbum(entry);
   player.querySelector(".mini-player-quality").textContent =
-    formatSourceQuality(entry.localTrack.track);
+    formatSource(entry.localTrack.track);
   player.querySelector(".mini-player-output").textContent = formatOutput(entry);
 
   const duration = remotePlaybackEnabled(entry) ? remoteDuration : (Number.isFinite(audio.duration) ? audio.duration : 0);
