@@ -111,4 +111,20 @@ async function connectWith(fetchImplementation) {
   delete globalThis.location;
 }
 
+{
+  const connectRemote = () => connectNavidrome({
+    serverUrl: "https://music.example.com",
+    username: "listener",
+    userPassword: "secret",
+  });
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === "GET") return ok({ status: "failed" });
+    throw new TypeError("Load failed");
+  };
+  await assert.rejects(connectRemote(), /browser can reach music\.example\.com, but the Navidrome POST request failed/);
+
+  globalThis.fetch = async () => { throw new TypeError("Load failed"); };
+  await assert.rejects(connectRemote(), /browser could not fetch the Navidrome API at music\.example\.com/);
+}
+
 console.log("Navidrome endpoint selection regressions passed.");

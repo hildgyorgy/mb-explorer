@@ -165,6 +165,25 @@ function endpointCandidates(targetProfile) {
   );
 }
 
+async function probeRemoteApi(baseUrl) {
+  const params = new URLSearchParams({
+    u: "connection-probe", t: "invalid", s: "probe",
+    v: API_VERSION, c: CLIENT_NAME, f: "json",
+  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  try {
+    await fetch(`${endpoint("ping", baseUrl)}?${params}`, {
+      method: "GET", credentials: "omit", cache: "no-store", signal: controller.signal,
+    });
+    return true;
+  } catch (error) {
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 async function firstReachableEndpoint(targetProfile) {
   const errors = [];
   let localHttpBlocked = false;
@@ -191,10 +210,11 @@ async function firstReachableEndpoint(targetProfile) {
     throw remoteError;
   }
   const host = targetProfile.remoteBaseUrl.hostname;
-  const tailnetHint = host.endsWith(".ts.net")
-    ? " If this is a Tailscale address, connect Tailscale on this device."
-    : "";
-  throw new Error(`This device could not reach ${host}. Open that address in the same browser to check the connection.${tailnetHint}`);
+  const simpleRequestWorks = await probeRemoteApi(targetProfile.remoteBaseUrl);
+  if (simpleRequestWorks) {
+    throw new Error(`The browser can reach ${host}, but the Navidrome POST request failed. Please report this message; it points to the API request rather than the network connection.`);
+  }
+  throw new Error(`The browser could not fetch the Navidrome API at ${host} from this webapp. Opening the Navidrome page directly does not test cross-site API access. Please report this message.`);
 }
 
 function refreshMappedPlaybackUrls() {
