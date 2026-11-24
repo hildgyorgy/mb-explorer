@@ -190,7 +190,11 @@ async function firstReachableEndpoint(targetProfile) {
   if (remoteError?.message && remoteError.message !== "Load failed" && remoteError.message !== "Failed to fetch") {
     throw remoteError;
   }
-  throw new Error("Navidrome could not be reached at either configured address.");
+  const host = targetProfile.remoteBaseUrl.hostname;
+  const tailnetHint = host.endsWith(".ts.net")
+    ? " If this is a Tailscale address, connect Tailscale on this device."
+    : "";
+  throw new Error(`This device could not reach ${host}. Open that address in the same browser to check the connection.${tailnetHint}`);
 }
 
 function refreshMappedPlaybackUrls() {
