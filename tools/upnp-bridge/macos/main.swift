@@ -37,7 +37,11 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         configureStatusIcon()
 
         let menu = NSMenu()
-        statusMenuItem = NSMenuItem(title: "Bridge starting…", action: nil, keyEquivalent: "")
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.2.5"
+        let versionMenuItem = NSMenuItem(title: "MusicBrainz Explorer Bridge v.\(version)", action: nil, keyEquivalent: "")
+        versionMenuItem.isEnabled = false
+        menu.addItem(versionMenuItem)
+        statusMenuItem = NSMenuItem(title: "starting…", action: nil, keyEquivalent: "")
         statusMenuItem.isEnabled = false
         menu.addItem(statusMenuItem)
         menu.addItem(.separator())
@@ -207,12 +211,12 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func startBridge() {
         guard bridgeProcess == nil && !isStopping else { return }
         guard let resources = Bundle.main.resourceURL else {
-            statusMenuItem.title = "Bridge resources missing"
+            statusMenuItem.title = "resources missing"
             return
         }
         let executable = resources.appendingPathComponent("bridge/MusicBrainzExplorerBridgeService")
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
-            statusMenuItem.title = "Bridge service missing"
+            statusMenuItem.title = "service missing"
             return
         }
 
@@ -247,7 +251,7 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.rendererTask = nil
                     try? self.logHandle?.close()
                     self.logHandle = nil
-                    self.statusMenuItem.title = "Bridge stopped"
+                    self.statusMenuItem.title = "stopped"
                     self.updateStatusIcon(running: false)
                     self.showRendererRows(["Bridge stopped"])
                     self.updateMenuActions()
@@ -259,12 +263,12 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             try process.run()
             bridgeProcess = process
-            statusMenuItem.title = "Bridge starting…"
+            statusMenuItem.title = "starting…"
             updateStatusIcon(running: false)
             showRendererRows(["Searching for renderers…"])
             updateMenuActions()
         } catch {
-            statusMenuItem.title = "Bridge could not start"
+            statusMenuItem.title = "could not start"
             updateStatusIcon(running: false)
             appendLog("Launcher error: \(error.localizedDescription)\n")
             try? logHandle?.close()
@@ -276,7 +280,7 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func stopBridge() {
         guard let process = bridgeProcess, process.isRunning, !isStopping else { return }
         isStopping = true
-        statusMenuItem.title = "Bridge stopping…"
+        statusMenuItem.title = "stopping…"
         updateStatusIcon(running: false)
         rendererGeneration += 1
         rendererTask?.cancel()
@@ -300,8 +304,8 @@ final class BridgeAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let healthy = (response as? HTTPURLResponse)?.statusCode == 200
             DispatchQueue.main.async {
                 guard let self = self, self.bridgeProcess === process, !self.isStopping else { return }
-                let wasHealthy = self.statusMenuItem.title == "Bridge running"
-                self.statusMenuItem.title = healthy ? "Bridge running" : "Bridge unavailable"
+                let wasHealthy = self.statusMenuItem.title == "running"
+                self.statusMenuItem.title = healthy ? "running" : "unavailable"
                 self.updateStatusIcon(running: healthy)
                 if healthy && !wasHealthy { self.refreshRenderers() }
             }

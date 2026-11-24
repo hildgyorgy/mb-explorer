@@ -16,7 +16,7 @@ active queue.
 ## macOS user instructions
 
 Download the Apple Silicon Mac app from the
-[Bridge 0.2.4 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.4).
+[Bridge 0.2.5 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.5).
 
 1. Open `MusicBrainz-Explorer-Bridge-…-macOS-….dmg`.
 2. Drag **MusicBrainz Explorer Bridge** into **Applications**.
@@ -27,7 +27,7 @@ Download the Apple Silicon Mac app from the
    its bundled webapp at
    `http://127.0.0.1:9181/`. This local webapp talks to the bridge at the
    same address, so Safari does not need Tailscale Serve for bridge control.
-   The menu also shows **Bridge running**, stop or start the bridge, or quit.
+   The menu shows the Bridge version and **running** status, and lets you stop or start the bridge, or quit.
    Under **Detected renderers**, it shows each discovered device's name and
    local IP address. Opening the menu refreshes this list in the background.
    Discovery first uses multicast SSDP, then a bounded local-network deep
@@ -49,7 +49,7 @@ Navidrome; otherwise the bridge relays it. The Mac must remain awake while the r
 item can open the Explorer, show the diagnostic log, stop or start the bridge,
 or quit the app.
 
-The public 0.2.4 DMG is signed with a **Developer ID Application** certificate,
+The public 0.2.5 DMG is signed with a **Developer ID Application** certificate,
 notarized by Apple, and stapled. Running the build script without
 `CODESIGN_IDENTITY` creates an ad-hoc signed DMG for local testing only.
 
