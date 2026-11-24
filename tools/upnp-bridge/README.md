@@ -111,23 +111,6 @@ macos/notarize_macos.sh dist/MusicBrainz-Explorer-Bridge-…dmg NOTARY_PROFILE
 Store notarization credentials once with `xcrun notarytool store-credentials`;
 never place them in the repository or build script.
 
-### GitHub Actions releases
-
-The [release workflow](../../.github/workflows/bridge-release.yml) builds, signs,
-notarizes and publishes the Apple Silicon DMG from a `bridge-vX.Y.Z` tag.
-Create a GitHub Actions environment named `bridge-release`, restrict deployments
-to matching tags, and restrict creation of those tags to trusted maintainers.
-Add these environment secrets:
-
-- `APPLE_DEVELOPER_ID_P12_BASE64` and `APPLE_DEVELOPER_ID_P12_PASSWORD` for the
-  password-protected Developer ID Application certificate and private key.
-- `APPLE_NOTARY_KEY` (the contents of the App Store Connect team API `.p8` file),
-  `APPLE_NOTARY_KEY_ID` and `APPLE_NOTARY_ISSUER` for notarization.
-
-Update the Bridge version in `macos/Info.plist`,
-`macos/build_macos.sh` and `musicards_upnp_bridge.py`. Commit to `main`, then
-push an annotated `bridge-vX.Y.Z` tag with the release notes as its message.
-
 ## Docker / Linux: build from source
 
 This is a source-build example, not a downloadable Bridge release. A custom
