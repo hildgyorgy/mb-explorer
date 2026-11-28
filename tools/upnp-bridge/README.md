@@ -16,7 +16,13 @@ active queue.
 ## macOS user instructions
 
 Download the Apple Silicon Mac app from the
-[Bridge 0.2.5 release page](https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.5).
+[latest Bridge release](https://github.com/hildgyorgy/mb-explorer/releases/latest).
+The [Bridge setup guide](https://hildgyorgy.github.io/mb-explorer/support.html#upnp-bridge)
+covers installation and both playback setups, including the hosted Explorer
+with Tailscale Serve.
+
+For each new GitHub release, start with the [release template](RELEASE-TEMPLATE.md)
+and add that version’s changes at the end.
 
 1. Open `MusicBrainz-Explorer-Bridge-…-macOS-….dmg`.
 2. Drag **MusicBrainz Explorer Bridge** into **Applications**.
@@ -145,5 +151,5 @@ control. The bridge discovers and controls the renderer on the LAN, and the
 renderer fetches audio directly from the Navidrome **Home network URL** such as
 `http://umbrel.local:4533`.
 
-The browsing phone or computer must be connected to the same tailnet as the
+The computer running the hosted Explorer must be connected to the same tailnet as the
 Umbrel. Do not use Tailscale Funnel: the bridge is intended to remain private.

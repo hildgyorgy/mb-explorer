@@ -489,25 +489,38 @@
         Because the browser, operating-system mixer and chosen audio device remain part of the playback chain,
         bit-perfect output cannot be guaranteed.
       </p>
-      <div class="note">
-        For Navidrome playback, UPnP network-renderer output is available through the
-        <a href="https://github.com/hildgyorgy/mb-explorer/releases/tag/bridge-v0.2.5">MusicBrainz Explorer Bridge</a>.
-        The Mac app includes a local copy of Explorer for straightforward UPnP control.
-      </div>
-      <p>
-        The currently downloadable Bridge is an Apple Silicon Mac app. Open Explorer from its menu to use the
-        local address <code>http://127.0.0.1:9181</code> for UPnP playback. The Mac and renderer must share a
-        local network; Navidrome must be reachable from the Mac or through its configured local-network URL.
-      </p>
       <p>
         On phone browsers, Explorer offers Navidrome playback through system audio. The UPnP output choice
         and its optional local Navidrome URL are disabled to keep phone setup simple. If the Navidrome URL
         ends in <code>.ts.net</code>, Tailscale must also be connected on the phone.
       </p>
-      <p>
-        To use the hosted Explorer instead, open <strong>Output → UPnP renderer</strong> in Setup and expand
-        <strong>Set up Tailscale Serve for the hosted Explorer</strong> below the Bridge URL field.
-      </p>
+    </section>
+
+    <section aria-labelledby="upnp-bridge">
+      <h2 id="upnp-bridge">UPnP Bridge setup guide</h2>
+      <p>The Bridge lets Explorer control a UPnP renderer on the Mac’s local network and play music from Navidrome.</p>
+
+      <h3>1. Install</h3>
+      <p>Download the Apple Silicon DMG, drag <strong>MusicBrainz Explorer Bridge</strong> into Applications, and open it. Allow local network access if macOS asks. The Bridge icon appears in the menu bar. <a href="https://github.com/hildgyorgy/mb-explorer/releases/latest">Download the latest Bridge</a>.</p>
+
+      <h3>2. Set up either Explorer</h3>
+      <ul>
+        <li><strong>Bundled Explorer.</strong> Choose <strong>Open MB Explorer locally</strong> in the Bridge menu. Use <code>http://127.0.0.1:9181</code> as the <strong>Bridge URL</strong>.</li>
+        <li><strong>Hosted Explorer.</strong> Start the Bridge and connect Tailscale on the same Mac. Run this command in Terminal on that Mac:
+          <pre style="white-space: pre-wrap; overflow-wrap: anywhere"><code>/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg http://127.0.0.1:9181</code></pre>
+          Follow any first-time HTTPS setup prompt. Open the hosted Explorer from the Bridge menu or <a href="./">open it in your browser</a>. Copy the <code>https://…ts.net</code> URL printed by Serve into <strong>Bridge URL</strong>. The browser device must be on the same tailnet. Use Tailscale Serve for private access.
+        </li>
+      </ul>
+      <p>In Setup, connect <strong>Navidrome</strong> under <strong>Source</strong>. Under <strong>Output → UPnP renderer</strong>, enter the Bridge URL for the option above, select <strong>Discover UPnP renderers</strong>, and choose your renderer.</p>
+
+      <h3>3. Play</h3>
+      <p>Open a release matched to your Navidrome library and start a playable track. Keep the Bridge running and the Mac awake. If you set <strong>Local URL for UPnP</strong> in Navidrome settings, the renderer pulls the audio directly from that address. Otherwise the Bridge relays the stream.</p>
+
+      <h3>Troubleshooting</h3>
+      <ul>
+        <li><strong>Bridge won’t connect.</strong> Check that it is running in the Mac menu bar. For the hosted Explorer, check <code>tailscale serve status</code> and make sure you copied the Mac’s Serve URL into <strong>Bridge URL</strong>. Enter the Navidrome server address separately under <strong>Source</strong>.</li>
+        <li><strong>Renderer missing.</strong> Check that the Mac and renderer share a local network. If discovery still misses it, enter the device’s local address under <strong>Renderer IP</strong> in the Bridge menu and try discovery again.</li>
+      </ul>
     </section>
 
     <section aria-labelledby="privacy">
